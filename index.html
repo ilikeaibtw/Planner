@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0e14">
+<title>Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" onerror="this.remove()">
+<style>
+  :root{
+    --accent: 99,102,241;
+    --accent-solid: #6366f1;
+    --accent-fg: #fff;
+    --card-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    --bg-dim: 0.35;
+    --bg-blur: 0px;
+    --card-alpha: 0.55;
+    --radius-lg: 22px;
+    --radius-md: 16px;
+    --radius-sm: 12px;
+    --ease: cubic-bezier(.4,0,.2,1);
+    --text-1: rgba(255,255,255,0.96);
+    --text-2: rgba(255,255,255,0.62);
+    --text-3: rgba(255,255,255,0.38);
+    --card-bg: rgba(255,255,255,0.06);
+    --card-border: rgba(255,255,255,0.10);
+    --page-bg: #0b0e14;
+  }
+  :root[data-theme="light"]{
+    --text-1: rgba(20,20,25,0.94);
+    --text-2: rgba(20,20,25,0.60);
+    --text-3: rgba(20,20,25,0.38);
+    --card-bg: rgba(255,255,255,0.55);
+    --card-border: rgba(20,20,25,0.08);
+    --page-bg: #f4f5f8;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif;
+    color: var(--text-1);
+    background: var(--page-bg);
+    min-height:100dvh;
+    overflow-x:hidden;
+  }
+  #bg-layer{
+    position:fixed; inset:0; z-index:-2;
+    background-size:cover; background-position:center;
+    transition: background 400ms var(--ease);
+  }
+  #bg-dim{
+    position:fixed; inset:0; z-index:-1;
+    background: rgba(var(--bg-dim-rgb, 0,0,0), var(--bg-dim));
+    backdrop-filter: blur(var(--bg-blur));
+    -webkit-backdrop-filter: blur(var(--bg-blur));
+    transition: background 300ms var(--ease), backdrop-filter 300ms var(--ease);
+  }
+  .app{
+    max-width:720px;
+    margin:0 auto;
+    padding: 24px 16px 100px;
+    min-height:100dvh;
+    position:relative;
+  }
+  .glass{
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--card-shadow, 0 8px 32px rgba(0,0,0,0.18));
+  }
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom: 18px;
+  }
+  .topbar .brand{ font-weight:800; font-size:15px; letter-spacing:0.02em; color:var(--text-2); text-transform:uppercase; }
+  .iconbtn{
+    width:40px; height:40px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background: var(--card-bg); border:1px solid var(--card-border);
+    color:var(--text-1); cursor:pointer; font-size:18px;
+    transition: transform 150ms var(--ease), background 150ms var(--ease);
+    backdrop-filter: blur(12px);
+  }
+  .iconbtn:hover{ transform: translateY(-1px); background: rgba(255,255,255,0.12); }
+  :root[data-theme="light"] .iconbtn:hover{ background: rgba(20,20,25,0.08); }
+  :root[data-theme="light"] .pillbtn:hover{ background: rgba(20,20,25,0.08); }
+  :root[data-theme="light"] .seg-btn{ background: rgba(20,20,25,0.05); }
+  :root[data-theme="light"] .mini-btn{ background: rgba(20,20,25,0.07); }
+  .iconbtn:active{ transform: scale(0.94); }
+  .iconbtn:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{
+    outline: 2px solid var(--accent-solid); outline-offset:2px;
+  }
+  .tabbar{ display:flex; gap:8px; margin-bottom:18px; }
+  .tabbtn{
+    flex:1; text-align:center; padding:10px 14px; border-radius:14px;
+    background: transparent; border:1px solid transparent; color:var(--text-2);
+    font-size:14px; font-weight:600; cursor:pointer; transition: all 200ms var(--ease);
+  }
+  .tabbtn.active{ background: var(--card-bg); border-color: var(--card-border); color:var(--text-1); }
+
+  .date-header{ text-align:center; padding: 8px 0 20px; }
+  .date-rel{ font-size:13px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color: var(--accent-solid); margin-bottom:6px; }
+  .date-main{ font-size:28px; font-weight:800; letter-spacing:-0.01em; }
+  .date-nav{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:10px; }
+  .date-nav .center{ display:flex; gap:8px; }
+  .pillbtn{
+    padding:8px 14px; border-radius:999px; background:var(--card-bg); border:1px solid var(--card-border);
+    color:var(--text-1); font-size:13px; font-weight:600; cursor:pointer; transition: all 150ms var(--ease);
+  }
+  .pillbtn:hover{ background: rgba(255,255,255,0.12); }
+
+  .week-strip{ display:flex; gap:6px; margin-bottom:22px; }
+  .week-day{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;
+    padding:10px 4px; border-radius:14px; cursor:pointer; transition: all 200ms var(--ease);
+    border:1px solid transparent;
+  }
+  .week-day.selected{ background:var(--card-bg); border-color:var(--card-border); }
+  .week-day .wd-label{ font-size:11px; color:var(--text-3); font-weight:600; text-transform:uppercase; }
+  .week-day .wd-num{ font-size:15px; font-weight:700; color:var(--text-1); }
+  .week-day .wd-ring{ width:8px; height:8px; border-radius:50%; background: var(--text-3); margin-top:2px; }
+  .week-day.has-tasks .wd-ring{ background: var(--accent-solid); }
+  .week-day.today .wd-num{ color: var(--accent-solid); }
+
+  .progress-line{ display:flex; align-items:center; gap:10px; margin-bottom:18px; color:var(--text-2); font-size:13px; font-weight:600; }
+  .progress-track{ flex:1; height:6px; border-radius:99px; background: rgba(255,255,255,0.08); overflow:hidden; }
+  .progress-fill{ height:100%; border-radius:99px; background: var(--accent-solid); transition: width 350ms var(--ease); }
+
+  .day-slide{ position:relative; }
+  .day-content{ animation: fadeIn 220ms var(--ease); }
+  @keyframes fadeIn{ from{ opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+  .slide-left-out{ animation: slideLeftOut 220ms var(--ease) forwards; }
+  .slide-right-out{ animation: slideRightOut 220ms var(--ease) forwards; }
+  .slide-left-in{ animation: slideLeftIn 220ms var(--ease) forwards; }
+  .slide-right-in{ animation: slideRightIn 220ms var(--ease) forwards; }
+  @keyframes slideLeftOut{ to{ opacity:0; transform: translateX(-24px);} }
+  @keyframes slideRightOut{ to{ opacity:0; transform: translateX(24px);} }
+  @keyframes slideLeftIn{ from{ opacity:0; transform: translateX(24px);} to{opacity:1; transform:translateX(0);} }
+  @keyframes slideRightIn{ from{ opacity:0; transform: translateX(-24px);} to{opacity:1; transform:translateX(0);} }
+
+  .section-block{ margin-bottom:22px; }
+  .section-head{ display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-left:2px; }
+  .section-head .emoji{ font-size:16px; }
+  .section-head .name{ font-size:14px; font-weight:700; color:var(--text-2); text-transform:uppercase; letter-spacing:0.04em; }
+  .section-head .count{ margin-left:auto; font-size:12px; color:var(--text-3); font-weight:600; }
+
+  .task-card{
+    display:flex; align-items:center; gap:14px;
+    padding:14px 16px; border-radius: var(--radius-md);
+    margin-bottom:10px; cursor:pointer; user-select:none;
+    transition: transform 150ms var(--ease), background 200ms var(--ease), opacity 200ms var(--ease);
+  }
+  .task-card:hover{ transform: translateY(-1px); }
+  .task-card:active{ transform: scale(0.985); }
+  .task-check{
+    width:26px; height:26px; border-radius:50%; flex-shrink:0;
+    border:2px solid var(--text-3); display:flex; align-items:center; justify-content:center;
+    transition: all 200ms var(--ease); position:relative;
+  }
+  .task-card.done .task-check{ background: var(--accent-solid); border-color: var(--accent-solid); color: var(--accent-fg); }
+  .task-check svg{ width:14px; height:14px; opacity:0; transform: scale(0.5); transition: all 200ms var(--ease); }
+  .task-card.done .task-check svg{ opacity:1; transform: scale(1); }
+  .task-body{ flex:1; min-width:0; }
+  .task-title{ font-size:15px; font-weight:600; color:var(--text-1); transition: opacity 200ms var(--ease); }
+  .task-card.done .task-title{ opacity:0.5; text-decoration: line-through; }
+  .task-meta{ font-size:12.5px; color:var(--text-3); margin-top:2px; }
+  .task-detail{ font-size:12.5px; color:var(--text-2); margin-top:2px; }
+  .task-edit-btn{ width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--text-3); flex-shrink:0; opacity:0; transition: opacity 150ms; }
+  .task-card:hover .task-edit-btn{ opacity:1; }
+
+  .empty-state{ text-align:center; padding: 60px 20px; color: var(--text-2); }
+  .empty-state .emoji{ font-size:40px; margin-bottom:12px; }
+  .empty-state .msg{ font-size:15px; font-weight:600; }
+  .empty-state .sub{ font-size:13px; color:var(--text-3); margin-top:6px; }
+
+  .fab{
+    position:fixed; right:24px; bottom:28px; width:56px; height:56px; border-radius:50%;
+    background: var(--accent-solid); color:var(--accent-fg); display:flex; align-items:center; justify-content:center;
+    font-size:26px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    transition: transform 150ms var(--ease); z-index:20; border:none;
+  }
+  .fab:hover{ transform: translateY(-2px) scale(1.03); }
+  .fab:active{ transform: scale(0.94); }
+
+  ::-webkit-scrollbar{ width:0; height:0; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  @media (max-width: 420px){
+    .date-main{ font-size:24px; }
+    .app{ padding: 18px 14px 100px; }
+  }
+
+  /* ---- modal / sheet ---- */
+  .overlay{
+    position:fixed; inset:0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+    display:flex; align-items:flex-end; justify-content:center; z-index:100;
+    opacity:0; pointer-events:none; transition: opacity 220ms var(--ease);
+  }
+  .overlay.open{ opacity:1; pointer-events:auto; }
+  @media (min-width:640px){ .overlay{ align-items:center; } }
+  .sheet{
+    width:100%; max-width:520px; max-height:88vh; overflow-y:auto;
+    background: rgba(20,22,30,0.92);
+    border: 1px solid var(--card-border);
+    border-radius: 24px 24px 0 0;
+    padding: 20px 20px calc(24px + env(safe-area-inset-bottom));
+    transform: translateY(24px); transition: transform 260ms var(--ease);
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.4);
+  }
+  :root[data-theme="light"] .sheet{ background: rgba(250,250,252,0.96); }
+  @media (min-width:640px){ .sheet{ border-radius:24px; transform: translateY(12px) scale(0.98); } }
+  .overlay.open .sheet{ transform: translateY(0) scale(1); }
+  .sheet-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .sheet-title{ font-size:18px; font-weight:800; }
+  .field{ margin-bottom:16px; }
+  .field label{ display:block; font-size:12.5px; font-weight:700; color:var(--text-2); text-transform:uppercase; letter-spacing:0.03em; margin-bottom:6px; }
+  .field input[type=text], .field input[type=date], .field input[type=number], .field textarea, .field select{
+    width:100%; padding:11px 12px; border-radius:12px; border:1px solid var(--card-border);
+    background: rgba(255,255,255,0.06); color: var(--text-1); font-size:14.5px; font-family:inherit;
+    transition: border-color 150ms;
+  }
+  :root[data-theme="light"] .field input, :root[data-theme="light"] .field textarea, :root[data-theme="light"] .field select{
+    background: rgba(0,0,0,0.03);
+  }
+  .field input:focus, .field textarea:focus, .field select:focus{ border-color: var(--accent-solid); outline:none; }
+  .field textarea{ resize:vertical; min-height:60px; }
+  .seg{ display:flex; gap:6px; flex-wrap:wrap; }
+  .seg-btn{
+    padding:8px 12px; border-radius:10px; background: rgba(255,255,255,0.06); border:1px solid var(--card-border);
+    color: var(--text-2); font-size:13px; font-weight:600; cursor:pointer; transition: all 150ms var(--ease);
+  }
+  .seg-btn.active{ background: var(--accent-solid); color:var(--accent-fg); border-color: var(--accent-solid); }
+  .weekday-grid{ display:flex; gap:6px; }
+  .weekday-grid .seg-btn{ flex:1; text-align:center; padding:8px 0; }
+  .recur-summary{ font-size:13px; color: var(--text-2); margin-top:8px; font-style:italic; }
+  .field-label-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .field-label-row label{ margin-bottom:0; }
+  .enddate-toggle{ position:relative; display:inline-block; width:38px; height:22px; flex:none; cursor:pointer; }
+  .enddate-toggle input{ position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; }
+  .enddate-toggle .track{
+    position:absolute; inset:0; border-radius:99px; background: rgba(255,255,255,0.14);
+    border:1px solid var(--card-border); transition: background-color 200ms var(--ease), border-color 200ms var(--ease);
+  }
+  :root[data-theme="light"] .enddate-toggle .track{ background: rgba(20,20,25,0.12); }
+  .enddate-toggle .knob{
+    position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
+    background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.35);
+    transition: transform 200ms var(--ease);
+  }
+  .enddate-toggle input:checked + .track{ background: var(--accent-solid); border-color: var(--accent-solid); }
+  .enddate-toggle input:checked + .track .knob{ transform: translateX(16px); }
+  .enddate-toggle input:focus-visible + .track{ outline:2px solid var(--accent-solid); outline-offset:2px; }
+  #f-end{ transition: opacity 200ms var(--ease), filter 200ms var(--ease); }
+  #f-end:disabled{ opacity:0.4; filter: blur(0.4px); pointer-events:none; }
+  .field-error{ font-size:12.5px; color:#ef4444; margin-top:6px; display:none; }
+  .field-error.show{ display:block; }
+  @media (prefers-reduced-motion: reduce){
+    .enddate-toggle .track, .enddate-toggle .knob, #f-end{ transition-duration: 0.001ms !important; }
+  }
+  .row-2{ display:flex; gap:12px; }
+  .row-2 > *{ flex:1; }
+  .sheet-actions{ display:flex; gap:10px; margin-top:8px; }
+  .btn{
+    flex:1; padding:13px 16px; border-radius:14px; border:none; font-size:15px; font-weight:700;
+    cursor:pointer; transition: transform 150ms var(--ease), opacity 150ms;
+  }
+  .btn:active{ transform: scale(0.97); }
+  .btn-primary{ background: var(--accent-solid); color:var(--accent-fg); }
+  .btn-secondary{ background: rgba(255,255,255,0.08); color: var(--text-1); }
+  :root[data-theme="light"] .btn-secondary{ background: rgba(20,20,25,0.07); }
+  .btn-danger{ background: rgba(239,68,68,0.15); color: #ef4444; }
+  .emoji-swatch-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .emoji-pick{ font-size:20px; width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.06); border:1px solid var(--card-border); cursor:pointer; }
+  .color-pick{ width:28px; height:28px; border-radius:50%; cursor:pointer; border:2px solid transparent; }
+  .color-pick.active{ border-color: var(--text-1); }
+
+  .section-mgmt-row{ display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:14px; margin-bottom:8px; }
+  .section-mgmt-row input[type=text]{ flex:1; background:transparent; border:none; color:var(--text-1); font-size:14.5px; font-weight:600; }
+  .section-mgmt-row input[type=text]:focus{ outline:none; }
+  .mini-btn{ width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; background: rgba(255,255,255,0.08); color: var(--text-2); cursor:pointer; font-size:13px; border:none; flex-shrink:0; }
+
+  .list-routine-row{ display:flex; align-items:center; gap:12px; padding:13px 16px; border-radius:16px; margin-bottom:8px; cursor:pointer; }
+  .list-routine-row .dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .list-routine-row .rtitle{ font-weight:600; font-size:14.5px; }
+  .list-routine-row .rmeta{ font-size:12.5px; color: var(--text-3); margin-top:2px; }
+</style>
+</head>
+<body>
+<div id="bg-layer"></div>
+<div id="bg-dim"></div>
+<div class="app" id="app">
+  <div class="topbar">
+    <div class="brand">Planner</div>
+    <div style="display:flex; gap:8px;">
+      <button class="iconbtn" id="listViewBtn" title="All routines">☰</button>
+      <button class="iconbtn" id="settingsBtn" title="Customize">⚙︎</button>
+    </div>
+  </div>
+
+  <div id="dayView">
+    <div class="date-nav">
+      <button class="iconbtn" id="prevDay">‹</button>
+      <div class="center">
+        <button class="pillbtn" id="todayBtn">Today</button>
+      </div>
+      <button class="iconbtn" id="nextDay">›</button>
+    </div>
+    <div class="date-header">
+      <div class="date-rel" id="dateRel">Today</div>
+      <div class="date-main" id="dateMain">Sunday, 27 September</div>
+    </div>
+    <div class="week-strip" id="weekStrip"></div>
+    <div class="progress-line">
+      <span id="progressLabel">0 / 0 done</span>
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+    <div class="day-slide">
+      <div class="day-content" id="dayContent"></div>
+    </div>
+  </div>
+
+  <div id="listView" style="display:none;"></div>
+</div>
+
+<button class="fab" id="fabAdd" title="Add routine">+</button>
+
+<!-- Routine add/edit modal -->
+<div class="overlay" id="routineOverlay">
+  <div class="sheet" id="routineSheet">
+    <div class="sheet-head">
+      <div class="sheet-title" id="routineModalTitle">New routine</div>
+      <button class="iconbtn" id="routineCloseBtn">✕</button>
+    </div>
+    <form id="routineForm">
+      <div class="field">
+        <label>Title</label>
+        <input type="text" id="f-title" required maxlength="80" placeholder="e.g. Morning run">
+      </div>
+      <div class="field">
+        <label>Section</label>
+        <select id="f-section"></select>
+      </div>
+      <div class="field">
+        <label>Detail / target (optional)</label>
+        <input type="text" id="f-detail" maxlength="120" placeholder="e.g. 10 pages">
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label>Start date</label>
+          <input type="date" id="f-start">
+        </div>
+        <div class="field">
+          <div class="field-label-row">
+            <label>End date (optional)</label>
+            <label class="enddate-toggle">
+              <input type="checkbox" id="f-end-toggle">
+              <span class="track"><span class="knob"></span></span>
+            </label>
+          </div>
+          <input type="date" id="f-end" disabled placeholder="No end date">
+          <div class="field-error" id="f-end-error">End date can't be before start date.</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Repeats</label>
+        <div class="seg" id="recurTypeSeg">
+          <div class="seg-btn" data-type="daily">Every day</div>
+          <div class="seg-btn" data-type="everyN">Every N days</div>
+          <div class="seg-btn" data-type="weekdays">Weekdays</div>
+          <div class="seg-btn" data-type="once">Once</div>
+        </div>
+        <div id="recurExtra" style="margin-top:10px;"></div>
+        <div class="recur-summary" id="recurSummaryText"></div>
+      </div>
+      <div class="field">
+        <label>Note (optional)</label>
+        <textarea id="f-note" maxlength="300" placeholder="Any reminder to yourself"></textarea>
+      </div>
+      <div class="sheet-actions">
+        <button type="button" class="btn btn-danger" id="deleteRoutineBtn" style="display:none;">Delete</button>
+        <button type="button" class="btn btn-secondary" id="cancelRoutineBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Section management modal -->
+<div class="overlay" id="sectionsOverlay">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div class="sheet-title">Sections</div>
+      <button class="iconbtn" id="sectionsCloseBtn">✕</button>
+    </div>
+    <div id="sectionsList"></div>
+    <button type="button" class="btn btn-secondary" id="addSectionBtn" style="width:100%; margin-top:6px;">+ Add section</button>
+  </div>
+</div>
+
+<!-- Customization / settings modal -->
+<div class="overlay" id="settingsOverlay">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div class="sheet-title">Customize</div>
+      <button class="iconbtn" id="settingsCloseBtn">✕</button>
+    </div>
+
+    <div class="field">
+      <label>Background</label>
+      <div class="emoji-swatch-row" id="bgPresetRow"></div>
+      <input type="file" id="bgUploadInput" accept="image/*" style="display:none;">
+      <button type="button" class="btn btn-secondary" id="bgUploadBtn" style="margin-top:10px; width:100%;">Upload your own image</button>
+    </div>
+
+    <div class="field">
+      <label>Background dim</label>
+      <input type="range" id="dimSlider" min="0" max="0.8" step="0.01" style="width:100%;">
+    </div>
+    <div class="field">
+      <label>Background blur</label>
+      <input type="range" id="blurSlider" min="0" max="24" step="1" style="width:100%;">
+    </div>
+
+    <div class="field">
+      <label>Accent color</label>
+      <div class="emoji-swatch-row" id="accentRow"></div>
+    </div>
+
+    <div class="field">
+      <label>Theme</label>
+      <div class="seg" id="themeSeg">
+        <div class="seg-btn" data-theme="light">Light</div>
+        <div class="seg-btn" data-theme="dark">Dark</div>
+        <div class="seg-btn" data-theme="auto">Auto</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Card translucency</label>
+      <input type="range" id="cardAlphaSlider" min="0.15" max="0.85" step="0.02" style="width:100%;">
+    </div>
+
+    <div class="sheet-actions">
+      <button type="button" class="btn btn-secondary" id="exportBtn">Export</button>
+      <button type="button" class="btn btn-secondary" id="importBtn">Import</button>
+    </div>
+    <input type="file" id="importInput" accept="application/json" style="display:none;">
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- Data model & persistence ---------- */
+  var STORAGE_KEY = "planner.v1";
+
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+  function todayISO(){
+    var d = new Date();
+    return isoFromDate(d);
+  }
+  function isoFromDate(d){
+    var y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+    return y + "-" + m + "-" + day;
+  }
+  function dateFromISO(iso){
+    var parts = iso.split("-").map(Number);
+    return new Date(parts[0], parts[1]-1, parts[2]);
+  }
+  function addDays(iso, n){
+    var d = dateFromISO(iso);
+    d.setDate(d.getDate()+n);
+    return isoFromDate(d);
+  }
+  function daysBetween(isoA, isoB){
+    var a = dateFromISO(isoA), b = dateFromISO(isoB);
+    return Math.round((b-a) / 86400000);
+  }
+  function addMonths(iso, n){
+    var d = dateFromISO(iso);
+    d.setMonth(d.getMonth()+n);
+    return isoFromDate(d);
+  }
+
+  function defaultData(){
+    var today = todayISO();
+    return {
+      version: 1,
+      sections: [
+        { id: "sec-workout", name: "Workout", emoji: "🏋️", color: "#f97316", order: 0 },
+        { id: "sec-reading", name: "Reading", emoji: "📚", color: "#6366f1", order: 1 },
+        { id: "sec-habits", name: "Daily habits", emoji: "✨", color: "#10b981", order: 2 }
+      ],
+      routines: [
+        {
+          id: uid(), title: "Workout A", sectionId: "sec-workout",
+          detail: "Full body strength", startDate: today, endDate: null,
+          recurrence: { type: "everyN", n: 2 }, note: "", createdAt: today
+        },
+        {
+          id: uid(), title: "Mobility", sectionId: "sec-workout",
+          detail: "15 min stretch", startDate: today, endDate: null,
+          recurrence: { type: "weekdays", days: [2,5] }, note: "", createdAt: today
+        },
+        {
+          id: uid(), title: "Read 10 pages", sectionId: "sec-reading",
+          detail: "Crime and Punishment", startDate: today, endDate: null,
+          recurrence: { type: "daily" }, note: "", createdAt: today
+        },
+        {
+          id: uid(), title: "Classic novel", sectionId: "sec-reading",
+          detail: "Weekend deep read", startDate: today, endDate: null,
+          recurrence: { type: "weekdays", days: [0,6] }, note: "", createdAt: today
+        }
+      ],
+      completions: {},
+      settings: {
+        theme: "dark",
+        accent: "#6366f1",
+        background: "preset-1",
+        customBgDataUrl: null,
+        bgDim: 0.35,
+        bgBlur: 0,
+        cardAlpha: 0.55
+      }
+    };
+  }
+
+  var DB = null;
+
+  function loadData(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) { DB = defaultData(); saveData(); return DB; }
+      var parsed = JSON.parse(raw);
+      if(!parsed || !parsed.sections || !parsed.routines){ DB = defaultData(); saveData(); return DB; }
+      DB = parsed;
+      return DB;
+    }catch(e){
+      console.warn("planner: failed to load, resetting", e);
+      DB = defaultData();
+      saveData();
+      return DB;
+    }
+  }
+
+  function saveData(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
+    }catch(e){
+      console.warn("planner: failed to save", e);
+      if(e && e.name === "QuotaExceededError"){
+        alert("Storage is full. Try removing the custom background image in Settings.");
+      }
+    }
+  }
+
+  /* ---------- Recurrence engine ---------- */
+  // weekday convention: 0=Sunday ... 6=Saturday (matches Date#getDay())
+  function occursOn(routine, iso){
+    if(routine.startDate && iso < routine.startDate) return false;
+    if(routine.endDate && iso > routine.endDate) return false;
+    var r = routine.recurrence;
+    if(!r) return false;
+    switch(r.type){
+      case "daily": return true;
+      case "everyN":
+        var n = Math.max(1, r.n|0 || 1);
+        var diff = daysBetween(routine.startDate, iso);
+        return diff >= 0 && diff % n === 0;
+      case "weekdays":
+        var dow = dateFromISO(iso).getDay();
+        return Array.isArray(r.days) && r.days.indexOf(dow) !== -1;
+      case "once":
+        return iso === (r.date || routine.startDate);
+      default: return false;
+    }
+  }
+
+  var WEEKDAY_ABBR = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  function recurrenceSummary(r){
+    if(!r) return "";
+    if(r.type === "daily") return "Every day";
+    if(r.type === "everyN"){
+      var n = r.n|0 || 1;
+      if(n === 1) return "Every day";
+      if(n === 2) return "Every other day";
+      return "Every " + n + " days";
+    }
+    if(r.type === "weekdays"){
+      var days = (r.days||[]).slice().sort();
+      if(days.length === 7) return "Every day";
+      if(days.length === 2 && days.indexOf(0)!==-1 && days.indexOf(6)!==-1) return "Weekends";
+      if(days.length === 5 && [1,2,3,4,5].every(function(d){return days.indexOf(d)!==-1;})) return "Weekdays";
+      return days.map(function(d){ return WEEKDAY_ABBR[d]; }).join(" & ");
+    }
+    if(r.type === "once"){
+      return "Once — " + (r.date || "");
+    }
+    return "";
+  }
+
+  /* ---------- App state & rendering (stage 1: read-only day view) ---------- */
+  var state = {
+    selectedDate: todayISO(),
+    view: "day"
+  };
+
+  function fmtDateHeader(iso){
+    var d = dateFromISO(iso);
+    var opts = { weekday: 'long', day: 'numeric', month: 'long' };
+    return d.toLocaleDateString(undefined, opts);
+  }
+  function relativeLabel(iso){
+    var t = todayISO();
+    var diff = daysBetween(t, iso);
+    if(diff === 0) return "Today";
+    if(diff === 1) return "Tomorrow";
+    if(diff === -1) return "Yesterday";
+    return diff > 0 ? ("In " + diff + " days") : ((-diff) + " days ago");
+  }
+
+  function completionKey(routineId, iso){ return routineId + "|" + iso; }
+  function isDone(routineId, iso){ return !!DB.completions[completionKey(routineId, iso)]; }
+
+  function tasksForDate(iso){
+    return DB.routines.filter(function(r){ return occursOn(r, iso); });
+  }
+
+  function renderWeekStrip(){
+    var el = document.getElementById("weekStrip");
+    el.innerHTML = "";
+    var center = dateFromISO(state.selectedDate);
+    var startOfWeek = new Date(center);
+    startOfWeek.setDate(center.getDate() - center.getDay());
+    var today = todayISO();
+    for(var i=0;i<7;i++){
+      var d = new Date(startOfWeek);
+      d.setDate(startOfWeek.getDate()+i);
+      var iso = isoFromDate(d);
+      var tasks = tasksForDate(iso);
+      var doneCount = tasks.filter(function(t){ return isDone(t.id, iso); }).length;
+      var div = document.createElement("div");
+      div.className = "week-day" + (iso === state.selectedDate ? " selected" : "") + (tasks.length ? " has-tasks" : "") + (iso === today ? " today" : "");
+      var pct = tasks.length ? Math.round(doneCount/tasks.length*100) : 0;
+      var ringStyle = tasks.length
+        ? "background: conic-gradient(var(--accent-solid) " + pct + "%, rgba(255,255,255,0.15) " + pct + "%);"
+        : "";
+      div.innerHTML =
+        '<div class="wd-label">' + WEEKDAY_ABBR[d.getDay()] + '</div>' +
+        '<div class="wd-num">' + d.getDate() + '</div>' +
+        '<div class="wd-ring" style="' + ringStyle + '"></div>';
+      (function(iso){ div.addEventListener("click", function(){ goToDate(iso); }); })(iso);
+      el.appendChild(div);
+    }
+  }
+
+  function renderDay(){
+    document.getElementById("dateMain").textContent = fmtDateHeader(state.selectedDate);
+    document.getElementById("dateRel").textContent = relativeLabel(state.selectedDate);
+    renderWeekStrip();
+
+    var tasks = tasksForDate(state.selectedDate);
+    var doneCount = tasks.filter(function(t){ return isDone(t.id, state.selectedDate); }).length;
+    document.getElementById("progressLabel").textContent = doneCount + " / " + tasks.length + " done";
+    document.getElementById("progressFill").style.width = tasks.length ? Math.round(doneCount/tasks.length*100) + "%" : "0%";
+
+    var content = document.getElementById("dayContent");
+    content.innerHTML = "";
+
+    if(tasks.length === 0){
+      content.innerHTML = '<div class="empty-state"><div class="emoji">🌤️</div><div class="msg">Nothing scheduled</div><div class="sub">Enjoy the free day, or add a routine.</div></div>';
+      return;
+    }
+
+    var sections = DB.sections.slice().sort(function(a,b){ return a.order-b.order; });
+    sections.forEach(function(sec){
+      var secTasks = tasks.filter(function(t){ return t.sectionId === sec.id; });
+      if(secTasks.length === 0) return;
+      var block = document.createElement("div");
+      block.className = "section-block";
+      var secDone = secTasks.filter(function(t){ return isDone(t.id, state.selectedDate); }).length;
+      block.innerHTML = '<div class="section-head"><span class="emoji">' + sec.emoji + '</span><span class="name">' + sec.name + '</span><span class="count">' + secDone + '/' + secTasks.length + '</span></div>';
+      secTasks.forEach(function(r){
+        var done = isDone(r.id, state.selectedDate);
+        var card = document.createElement("div");
+        card.className = "task-card glass" + (done ? " done" : "");
+        card.innerHTML =
+          '<div class="task-check"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
+          '<div class="task-body">' +
+            '<div class="task-title">' + escapeHtml(r.title) + '</div>' +
+            (r.detail ? '<div class="task-detail">' + escapeHtml(r.detail) + '</div>' : '') +
+            '<div class="task-meta">' + recurrenceSummary(r.recurrence) + '</div>' +
+          '</div>';
+        (function(r){
+          card.addEventListener("click", function(){ toggleDone(r.id); });
+        })(r);
+        block.appendChild(card);
+      });
+      content.appendChild(block);
+    });
+  }
+
+  function toggleDone(routineId){
+    var key = completionKey(routineId, state.selectedDate);
+    if(DB.completions[key]) delete DB.completions[key];
+    else DB.completions[key] = true;
+    saveData();
+    renderDay();
+  }
+
+  var prefersReducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function goToDate(iso, direction){
+    if(iso === state.selectedDate) return;
+    var dir = direction || (iso > state.selectedDate ? "left" : "right");
+    var content = document.getElementById("dayContent");
+    if(prefersReducedMotion || !direction){
+      state.selectedDate = iso;
+      renderDay();
+      return;
+    }
+    content.classList.add(dir === "left" ? "slide-left-out" : "slide-right-out");
+    setTimeout(function(){
+      state.selectedDate = iso;
+      renderDay();
+      var freshContent = document.getElementById("dayContent");
+      freshContent.classList.remove("slide-left-out","slide-right-out","slide-left-in","slide-right-in","day-content");
+      void freshContent.offsetWidth;
+      freshContent.classList.add(dir === "left" ? "slide-left-in" : "slide-right-in");
+    }, 180);
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  document.getElementById("prevDay").addEventListener("click", function(){ goToDate(addDays(state.selectedDate, -1), "right"); });
+  document.getElementById("nextDay").addEventListener("click", function(){ goToDate(addDays(state.selectedDate, 1), "left"); });
+  document.getElementById("todayBtn").addEventListener("click", function(){ goToDate(todayISO()); });
+
+  document.addEventListener("keydown", function(e){
+    if(state.view !== "day") return;
+    var tag = (document.activeElement && document.activeElement.tagName) || "";
+    if(tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if(routineOverlay.classList.contains("open") || sectionsOverlay.classList.contains("open")) return;
+    if(e.key === "ArrowLeft"){ goToDate(addDays(state.selectedDate, -1), "right"); }
+    else if(e.key === "ArrowRight"){ goToDate(addDays(state.selectedDate, 1), "left"); }
+  });
+
+  /* swipe (touch) + trackpad horizontal wheel navigation, debounced */
+  (function(){
+    var dayViewEl = document.getElementById("dayView");
+    var touchStartX = null, touchStartY = null, touchHandled = false;
+    dayViewEl.addEventListener("touchstart", function(e){
+      if(state.view !== "day" || e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; touchHandled = false;
+    }, {passive:true});
+    dayViewEl.addEventListener("touchmove", function(e){
+      if(touchStartX === null || touchHandled) return;
+      var dx = e.touches[0].clientX - touchStartX;
+      var dy = e.touches[0].clientY - touchStartY;
+      if(Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)*1.5){
+        touchHandled = true;
+        if(dx < 0) goToDate(addDays(state.selectedDate, 1), "left");
+        else goToDate(addDays(state.selectedDate, -1), "right");
+      }
+    }, {passive:true});
+    dayViewEl.addEventListener("touchend", function(){ touchStartX = null; touchStartY = null; });
+
+    var wheelLocked = false;
+    dayViewEl.addEventListener("wheel", function(e){
+      if(state.view !== "day") return;
+      if(Math.abs(e.deltaX) < 24 || Math.abs(e.deltaX) < Math.abs(e.deltaY)) return;
+      if(wheelLocked) return;
+      wheelLocked = true;
+      if(e.deltaX > 0) goToDate(addDays(state.selectedDate, 1), "left");
+      else goToDate(addDays(state.selectedDate, -1), "right");
+      setTimeout(function(){ wheelLocked = false; }, 420);
+    }, {passive:true});
+  })();
+
+  /* ---------- Routine add/edit modal ---------- */
+  var routineOverlay = document.getElementById("routineOverlay");
+  var editingRoutineId = null;
+  var currentRecurType = "daily";
+
+  function sortedSections(){ return DB.sections.slice().sort(function(a,b){return a.order-b.order;}); }
+
+  function populateSectionSelect(){
+    var sel = document.getElementById("f-section");
+    sel.innerHTML = "";
+    sortedSections().forEach(function(s){
+      var opt = document.createElement("option");
+      opt.value = s.id; opt.textContent = s.emoji + " " + s.name;
+      sel.appendChild(opt);
+    });
+  }
+
+  function setRecurType(type){
+    currentRecurType = type;
+    document.querySelectorAll("#recurTypeSeg .seg-btn").forEach(function(b){
+      b.classList.toggle("active", b.dataset.type === type);
+    });
+    var extra = document.getElementById("recurExtra");
+    extra.innerHTML = "";
+    if(type === "everyN"){
+      extra.innerHTML = '<label style="display:block;font-size:12.5px;font-weight:700;color:var(--text-2);margin-bottom:6px;">Repeat every</label>' +
+        '<input type="number" id="f-everyN" min="1" max="60" value="2" style="width:100px; padding:10px 12px; border-radius:12px; border:1px solid var(--card-border); background:rgba(255,255,255,0.06); color:var(--text-1); font-size:14.5px;"> <span style="color:var(--text-2); font-size:13px;">days</span>';
+      document.getElementById("f-everyN").addEventListener("input", updateRecurSummary);
+    } else if(type === "weekdays"){
+      var labels = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+      var html = '<div class="weekday-grid" id="weekdayGrid">';
+      for(var i=0;i<7;i++){ html += '<div class="seg-btn" data-day="'+i+'">'+labels[i]+'</div>'; }
+      html += '</div>';
+      extra.innerHTML = html;
+      extra.querySelectorAll(".seg-btn").forEach(function(b){
+        b.addEventListener("click", function(){ b.classList.toggle("active"); updateRecurSummary(); });
+      });
+    } else if(type === "once"){
+      extra.innerHTML = '<label style="display:block;font-size:12.5px;font-weight:700;color:var(--text-2);margin-bottom:6px;">Date</label>' +
+        '<input type="date" id="f-onceDate" style="width:100%; padding:10px 12px; border-radius:12px; border:1px solid var(--card-border); background:rgba(255,255,255,0.06); color:var(--text-1); font-size:14.5px;">';
+      document.getElementById("f-onceDate").addEventListener("input", updateRecurSummary);
+    }
+    updateRecurSummary();
+  }
+
+  function buildRecurrenceFromForm(){
+    if(currentRecurType === "daily") return { type: "daily" };
+    if(currentRecurType === "everyN"){
+      var n = parseInt(document.getElementById("f-everyN").value, 10) || 1;
+      return { type: "everyN", n: Math.max(1, n) };
+    }
+    if(currentRecurType === "weekdays"){
+      var days = [];
+      document.querySelectorAll("#weekdayGrid .seg-btn.active").forEach(function(b){ days.push(parseInt(b.dataset.day,10)); });
+      return { type: "weekdays", days: days };
+    }
+    if(currentRecurType === "once"){
+      var dateEl = document.getElementById("f-onceDate");
+      return { type: "once", date: dateEl ? (dateEl.value || document.getElementById("f-start").value) : document.getElementById("f-start").value };
+    }
+    return { type: "daily" };
+  }
+
+  function updateRecurSummary(){
+    document.getElementById("recurSummaryText").textContent = recurrenceSummary(buildRecurrenceFromForm());
+  }
+
+  document.querySelectorAll("#recurTypeSeg .seg-btn").forEach(function(b){
+    b.addEventListener("click", function(){ setRecurType(b.dataset.type); });
+  });
+
+  function openRoutineModal(routine){
+    populateSectionSelect();
+    editingRoutineId = routine ? routine.id : null;
+    document.getElementById("routineModalTitle").textContent = routine ? "Edit routine" : "New routine";
+    document.getElementById("deleteRoutineBtn").style.display = routine ? "block" : "none";
+    document.getElementById("f-title").value = routine ? routine.title : "";
+    document.getElementById("f-section").value = routine ? routine.sectionId : (sortedSections()[0] && sortedSections()[0].id);
+    document.getElementById("f-detail").value = routine ? (routine.detail||"") : "";
+    document.getElementById("f-start").value = routine ? routine.startDate : (state.view === "day" ? state.selectedDate : todayISO());
+    var endToggle = document.getElementById("f-end-toggle");
+    var endInput = document.getElementById("f-end");
+    var hasEnd = !!(routine && routine.endDate);
+    endToggle.checked = hasEnd;
+    endInput.value = hasEnd ? routine.endDate : "";
+    endInput.disabled = !hasEnd;
+    document.getElementById("f-end-error").classList.remove("show");
+    document.getElementById("f-note").value = routine ? (routine.note||"") : "";
+    var rtype = routine ? routine.recurrence.type : "daily";
+    setRecurType(rtype);
+    if(routine){
+      if(rtype === "everyN"){ document.getElementById("f-everyN").value = routine.recurrence.n; }
+      if(rtype === "weekdays"){
+        (routine.recurrence.days||[]).forEach(function(d){
+          var btn = document.querySelector('#weekdayGrid .seg-btn[data-day="'+d+'"]');
+          if(btn) btn.classList.add("active");
+        });
+      }
+      if(rtype === "once"){ document.getElementById("f-onceDate").value = routine.recurrence.date || routine.startDate; }
+      updateRecurSummary();
+    }
+    routineOverlay.classList.add("open");
+    setTimeout(function(){ document.getElementById("f-title").focus(); }, 200);
+  }
+
+  function closeRoutineModal(){
+    routineOverlay.classList.remove("open");
+  }
+
+  document.getElementById("f-end-toggle").addEventListener("change", function(){
+    var endInput = document.getElementById("f-end");
+    document.getElementById("f-end-error").classList.remove("show");
+    if(this.checked){
+      endInput.disabled = false;
+      if(!endInput.value){
+        var start = document.getElementById("f-start").value || todayISO();
+        endInput.value = addMonths(start, 1);
+      }
+      endInput.focus();
+    } else {
+      endInput.disabled = true;
+      endInput.value = "";
+    }
+  });
+
+  document.getElementById("fabAdd").addEventListener("click", function(){ openRoutineModal(null); });
+  document.getElementById("routineCloseBtn").addEventListener("click", closeRoutineModal);
+  document.getElementById("cancelRoutineBtn").addEventListener("click", closeRoutineModal);
+  routineOverlay.addEventListener("click", function(e){ if(e.target === routineOverlay) closeRoutineModal(); });
+
+  document.getElementById("routineForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var title = document.getElementById("f-title").value.trim();
+    if(!title) return;
+    var start = document.getElementById("f-start").value || todayISO();
+    var endToggle = document.getElementById("f-end-toggle");
+    var endInput = document.getElementById("f-end");
+    var end = endToggle.checked ? (endInput.value || null) : null;
+    var errorEl = document.getElementById("f-end-error");
+    errorEl.classList.remove("show");
+    if(endToggle.checked && end && end < start){
+      errorEl.classList.add("show");
+      endInput.focus();
+      return;
+    }
+    var recurrence = buildRecurrenceFromForm();
+    var data = {
+      title: title,
+      sectionId: document.getElementById("f-section").value,
+      detail: document.getElementById("f-detail").value.trim(),
+      startDate: start,
+      endDate: end,
+      recurrence: recurrence,
+      note: document.getElementById("f-note").value.trim()
+    };
+    if(editingRoutineId){
+      var r = DB.routines.find(function(x){ return x.id === editingRoutineId; });
+      if(r) Object.assign(r, data);
+    } else {
+      data.id = uid();
+      data.createdAt = todayISO();
+      DB.routines.push(data);
+    }
+    saveData();
+    closeRoutineModal();
+    renderDay();
+    if(state.view === "list") renderListView();
+  });
+
+  document.getElementById("deleteRoutineBtn").addEventListener("click", function(){
+    if(!editingRoutineId) return;
+    if(!confirm("Delete this routine? This cannot be undone.")) return;
+    DB.routines = DB.routines.filter(function(r){ return r.id !== editingRoutineId; });
+    Object.keys(DB.completions).forEach(function(k){ if(k.indexOf(editingRoutineId+"|") === 0) delete DB.completions[k]; });
+    saveData();
+    closeRoutineModal();
+    renderDay();
+    if(state.view === "list") renderListView();
+  });
+
+  /* ---------- Section management ---------- */
+  var sectionsOverlay = document.getElementById("sectionsOverlay");
+  var SECTION_EMOJIS = ["🏋️","📚","✨","🧘","🎯","💧","🍎","🛏️","🎨","💼","🧹","🎵","🌱","💰","🧠"];
+  var SECTION_COLORS = ["#6366f1","#f97316","#10b981","#ec4899","#0ea5e9","#f59e0b","#8b5cf6","#ef4444"];
+
+  function renderSectionsList(){
+    var el = document.getElementById("sectionsList");
+    el.innerHTML = "";
+    sortedSections().forEach(function(sec, idx){
+      var row = document.createElement("div");
+      row.className = "section-mgmt-row glass";
+      row.innerHTML =
+        '<span class="emoji-pick" data-role="emoji" style="font-size:18px; width:34px; height:34px;">' + sec.emoji + '</span>' +
+        '<input type="text" value="' + escapeHtml(sec.name) + '" data-role="name">' +
+        '<span class="color-pick" data-role="color" style="background:' + sec.color + '; width:20px; height:20px;"></span>' +
+        '<button class="mini-btn" data-role="up" title="Move up">↑</button>' +
+        '<button class="mini-btn" data-role="down" title="Move down">↓</button>' +
+        '<button class="mini-btn" data-role="del" title="Delete">✕</button>';
+      row.querySelector('[data-role="name"]').addEventListener("change", function(e){
+        sec.name = e.target.value.trim() || sec.name; saveData(); renderDay();
+      });
+      row.querySelector('[data-role="emoji"]').addEventListener("click", function(){
+        var i = SECTION_EMOJIS.indexOf(sec.emoji);
+        sec.emoji = SECTION_EMOJIS[(i+1+SECTION_EMOJIS.length) % SECTION_EMOJIS.length];
+        saveData(); renderSectionsList(); renderDay();
+      });
+      row.querySelector('[data-role="color"]').addEventListener("click", function(){
+        var i = SECTION_COLORS.indexOf(sec.color);
+        sec.color = SECTION_COLORS[(i+1+SECTION_COLORS.length) % SECTION_COLORS.length];
+        saveData(); renderSectionsList(); renderDay();
+      });
+      row.querySelector('[data-role="up"]').addEventListener("click", function(){
+        if(idx === 0) return;
+        var arr = sortedSections(); var prev = arr[idx-1];
+        var tmp = sec.order; sec.order = prev.order; prev.order = tmp;
+        saveData(); renderSectionsList(); renderDay();
+      });
+      row.querySelector('[data-role="down"]').addEventListener("click", function(){
+        var arr = sortedSections();
+        if(idx === arr.length-1) return;
+        var next = arr[idx+1];
+        var tmp = sec.order; sec.order = next.order; next.order = tmp;
+        saveData(); renderSectionsList(); renderDay();
+      });
+      row.querySelector('[data-role="del"]').addEventListener("click", function(){
+        var count = DB.routines.filter(function(r){ return r.sectionId === sec.id; }).length;
+        var msg = count > 0 ? ("Delete '" + sec.name + "' and its " + count + " routine(s)?") : ("Delete '" + sec.name + "'?");
+        if(!confirm(msg)) return;
+        DB.routines = DB.routines.filter(function(r){ return r.sectionId !== sec.id; });
+        DB.sections = DB.sections.filter(function(s){ return s.id !== sec.id; });
+        saveData(); renderSectionsList(); renderDay();
+        if(state.view === "list") renderListView();
+      });
+      el.appendChild(row);
+    });
+  }
+
+  document.getElementById("addSectionBtn").addEventListener("click", function(){
+    var maxOrder = DB.sections.reduce(function(m,s){ return Math.max(m,s.order); }, -1);
+    DB.sections.push({ id: uid(), name: "New section", emoji: "✨", color: "#6366f1", order: maxOrder+1 });
+    saveData(); renderSectionsList();
+  });
+  document.getElementById("sectionsCloseBtn").addEventListener("click", function(){ sectionsOverlay.classList.remove("open"); renderDay(); if(state.view==="list") renderListView(); });
+  sectionsOverlay.addEventListener("click", function(e){ if(e.target === sectionsOverlay){ sectionsOverlay.classList.remove("open"); renderDay(); if(state.view==="list") renderListView(); } });
+
+  /* ---------- All routines (list) view ---------- */
+  function renderListView(){
+    var el = document.getElementById("listView");
+    el.innerHTML = '<div class="sheet-head" style="margin-bottom:14px;"><div class="sheet-title">All routines</div><button class="pillbtn" id="manageSectionsBtn">Manage sections</button></div>';
+    var sections = sortedSections();
+    if(DB.routines.length === 0){
+      el.innerHTML += '<div class="empty-state"><div class="emoji">🗒️</div><div class="msg">No routines yet</div><div class="sub">Tap + to add your first one.</div></div>';
+    }
+    sections.forEach(function(sec){
+      var routines = DB.routines.filter(function(r){ return r.sectionId === sec.id; });
+      if(routines.length === 0) return;
+      var block = document.createElement("div");
+      block.className = "section-block";
+      block.innerHTML = '<div class="section-head"><span class="emoji">'+sec.emoji+'</span><span class="name">'+sec.name+'</span><span class="count">'+routines.length+'</span></div>';
+      routines.forEach(function(r){
+        var row = document.createElement("div");
+        row.className = "list-routine-row glass";
+        row.innerHTML = '<span class="dot" style="background:'+sec.color+'"></span>' +
+          '<div style="flex:1; min-width:0;"><div class="rtitle">'+escapeHtml(r.title)+'</div>' +
+          '<div class="rmeta">'+recurrenceSummary(r.recurrence)+(r.detail? ' · '+escapeHtml(r.detail):'')+'</div></div>' +
+          '<span style="color:var(--text-3); font-size:16px;">›</span>';
+        row.addEventListener("click", function(){ openRoutineModal(r); });
+        block.appendChild(row);
+      });
+      el.appendChild(block);
+    });
+    document.getElementById("manageSectionsBtn").addEventListener("click", function(){ renderSectionsList(); sectionsOverlay.classList.add("open"); });
+  }
+
+  document.getElementById("listViewBtn").addEventListener("click", function(){
+    state.view = state.view === "list" ? "day" : "list";
+    document.getElementById("dayView").style.display = state.view === "day" ? "" : "none";
+    document.getElementById("listView").style.display = state.view === "list" ? "" : "none";
+    document.getElementById("fabAdd").style.display = state.view === "day" || state.view === "list" ? "flex" : "none";
+    if(state.view === "list") renderListView(); else renderDay();
+  });
+
+  /* ---------- Customization / settings ---------- */
+  // faint paper-grain noise, shared by the light/warm-white presets
+  var NOISE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.025 0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>';
+  var NOISE_URL = "data:image/svg+xml," + encodeURIComponent(NOISE_SVG);
+  function lightBg(base){
+    return "url('" + NOISE_URL + "'), radial-gradient(ellipse at 50% 22%, rgba(30,20,10,0) 45%, rgba(30,20,10,0.045) 100%), " + base;
+  }
+
+  var BACKGROUND_PRESETS = {
+    "preset-1": { css: "linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)", tone: "dark", label: "Aurora" },
+    "preset-2": { css: "radial-gradient(circle at 30% 20%, #1a1a2e 0%, #16213e 40%, #0f0c29 100%)", tone: "dark", label: "Midnight" },
+    "preset-3": { css: "linear-gradient(135deg, #f6d365 0%, #fda085 60%, #f6a380 100%)", tone: "dark", label: "Sunset" },
+    "preset-4": { css: "linear-gradient(160deg, #0f2027 0%, #203a43 50%, #2c5364 100%)", tone: "dark", label: "Deep Sea" },
+    "preset-5": { css: "linear-gradient(135deg, #a1ffce 0%, #faffd1 100%)", tone: "dark", label: "Mint" },
+    "preset-6": { css: "linear-gradient(135deg, #ff5f6d 0%, #ffc371 100%)", tone: "dark", label: "Coral" },
+    "preset-7": { css: "linear-gradient(160deg, #232526 0%, #414345 100%)", tone: "dark", label: "Slate" },
+    "preset-8": { css: "radial-gradient(circle at 70% 30%, #3a1c71 0%, #d76d77 60%, #ffaf7b 100%)", tone: "dark", label: "Dusk" },
+    "ivory":     { css: lightBg("linear-gradient(160deg, #fffbf2 0%, #faf3e2 55%, #f2e8d2 100%)"), tone: "light", label: "Ivory" },
+    "cream":     { css: lightBg("linear-gradient(160deg, #fffaf0 0%, #f8edd7 55%, #efdfbe 100%)"), tone: "light", label: "Cream" },
+    "eggshell":  { css: lightBg("linear-gradient(160deg, #fdfbf5 0%, #f6f1e5 55%, #ebe3d0 100%)"), tone: "light", label: "Eggshell" },
+    "alabaster": { css: lightBg("radial-gradient(circle at 50% 18%, #ffffff 0%, #f7f3ec 55%, #eae4d6 100%)"), tone: "light", label: "Alabaster" },
+    "bone":      { css: lightBg("linear-gradient(160deg, #f8f5ed 0%, #efe8d9 55%, #e4dac5 100%)"), tone: "light", label: "Bone" },
+    "parchment": { css: lightBg("radial-gradient(circle at 30% 18%, #fbf4e1 0%, #f1e5c7 55%, #e4d3a8 100%)"), tone: "light", label: "Parchment" },
+    "linen":     { css: lightBg("linear-gradient(160deg, #faf7ef 0%, #f0eadd 55%, #e7decb 100%)"), tone: "light", label: "Linen" },
+    "porcelain": { css: lightBg("radial-gradient(circle at 50% 15%, #ffffff 0%, #f5f6f8 55%, #e8eaee 100%)"), tone: "light", label: "Porcelain" }
+  };
+  var BACKGROUND_GROUPS = [
+    { keys: ["preset-1","preset-2","preset-3","preset-4","preset-5","preset-6","preset-7","preset-8"] },
+    { keys: ["ivory","cream","eggshell","alabaster","bone","parchment","linen","porcelain"], divider: true }
+  ];
+  var ACCENT_PRESETS = ["#6366f1","#f97316","#10b981","#ec4899","#0ea5e9","#f59e0b","#8b5cf6","#ef4444","#111111","#2b2b2b"];
+
+  function hexToRgb(hex){
+    var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return m ? (parseInt(m[1],16)+","+parseInt(m[2],16)+","+parseInt(m[3],16)) : "99,102,241";
+  }
+
+  // pick black or white foreground text for a given accent so contrast always holds
+  function accentFg(hex){
+    var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if(!m) return "#ffffff";
+    function chan(c){ c = parseInt(c,16)/255; return c <= 0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); }
+    var lum = 0.2126*chan(m[1]) + 0.7152*chan(m[2]) + 0.0722*chan(m[3]);
+    return lum > 0.45 ? "#141419" : "#ffffff";
+  }
+
+  function applySettings(){
+    var s = DB.settings;
+    var root = document.documentElement;
+    var presetObj = (!s.customBgDataUrl && BACKGROUND_PRESETS[s.background]) || BACKGROUND_PRESETS["preset-1"];
+    // theme: explicit Light/Dark always wins; Auto follows the preset's tone when known, else OS preference
+    var effectiveTheme = s.theme;
+    if(s.theme === "auto"){
+      if(!s.customBgDataUrl && presetObj && presetObj.tone){
+        effectiveTheme = presetObj.tone;
+      } else {
+        effectiveTheme = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+      }
+    }
+    root.setAttribute("data-theme", effectiveTheme);
+    // accent
+    root.style.setProperty("--accent-solid", s.accent);
+    root.style.setProperty("--accent", hexToRgb(s.accent));
+    root.style.setProperty("--accent-fg", accentFg(s.accent));
+    // background
+    var bgLayer = document.getElementById("bg-layer");
+    if(s.customBgDataUrl){
+      bgLayer.style.background = "url('" + s.customBgDataUrl + "') center/cover no-repeat";
+    } else {
+      bgLayer.style.background = presetObj.css;
+    }
+    root.style.setProperty("--bg-dim", s.bgDim);
+    root.style.setProperty("--bg-dim-rgb", (!s.customBgDataUrl && presetObj.tone === "light") ? "255,253,247" : "0,0,0");
+    root.style.setProperty("--bg-blur", s.bgBlur + "px");
+    // card translucency
+    var alpha = s.cardAlpha;
+    var isWarmLight = !s.customBgDataUrl && presetObj.tone === "light" && effectiveTheme === "light";
+    if(effectiveTheme === "light"){
+      root.style.setProperty("--card-bg", isWarmLight ? "rgba(255,252,244," + alpha + ")" : "rgba(255,255,255," + alpha + ")");
+      root.style.setProperty("--card-border", isWarmLight ? "rgba(40,30,15,0.10)" : "rgba(20,20,25,0.08)");
+      root.style.setProperty("--card-shadow", isWarmLight ? "0 10px 30px rgba(120,92,45,0.14)" : "0 8px 28px rgba(20,20,25,0.10)");
+    } else {
+      root.style.setProperty("--card-bg", "rgba(255,255,255," + (alpha*0.22) + ")");
+      root.style.setProperty("--card-border", "rgba(255,255,255,0.10)");
+      root.style.setProperty("--card-shadow", "0 8px 32px rgba(0,0,0,0.18)");
+    }
+  }
+
+  function renderBgPresetRow(){
+    var row = document.getElementById("bgPresetRow");
+    row.innerHTML = "";
+    BACKGROUND_GROUPS.forEach(function(g){
+      if(g.divider){
+        var div = document.createElement("div");
+        div.style.width = "1px"; div.style.alignSelf = "stretch"; div.style.minHeight = "30px";
+        div.style.background = "var(--card-border)"; div.style.margin = "0 2px";
+        row.appendChild(div);
+      }
+      g.keys.forEach(function(key){
+        var preset = BACKGROUND_PRESETS[key];
+        if(!preset) return;
+        var sw = document.createElement("div");
+        sw.className = "emoji-pick";
+        sw.title = preset.label || key;
+        sw.style.background = preset.css;
+        sw.style.width = "36px"; sw.style.height = "36px";
+        sw.style.border = (DB.settings.background === key && !DB.settings.customBgDataUrl) ? "2px solid var(--text-1)" : "1px solid var(--card-border)";
+        sw.addEventListener("click", function(){
+          DB.settings.background = key;
+          DB.settings.customBgDataUrl = null;
+          saveData(); applySettings(); renderBgPresetRow();
+        });
+        row.appendChild(sw);
+      });
+    });
+  }
+
+  function renderAccentRow(){
+    var row = document.getElementById("accentRow");
+    row.innerHTML = "";
+    ACCENT_PRESETS.forEach(function(c){
+      var sw = document.createElement("div");
+      sw.className = "color-pick" + (DB.settings.accent === c ? " active" : "");
+      sw.style.background = c;
+      sw.addEventListener("click", function(){
+        DB.settings.accent = c; saveData(); applySettings(); renderAccentRow();
+      });
+      row.appendChild(sw);
+    });
+    var custom = document.createElement("input");
+    custom.type = "color"; custom.value = DB.settings.accent;
+    custom.style.width = "28px"; custom.style.height = "28px"; custom.style.border = "none"; custom.style.borderRadius = "50%"; custom.style.padding = "0"; custom.style.cursor = "pointer";
+    custom.addEventListener("input", function(){ DB.settings.accent = custom.value; saveData(); applySettings(); renderAccentRow(); });
+    row.appendChild(custom);
+  }
+
+  function renderThemeSeg(){
+    document.querySelectorAll("#themeSeg .seg-btn").forEach(function(b){
+      b.classList.toggle("active", b.dataset.theme === DB.settings.theme);
+    });
+  }
+
+  document.querySelectorAll("#themeSeg .seg-btn").forEach(function(b){
+    b.addEventListener("click", function(){
+      DB.settings.theme = b.dataset.theme;
+      saveData(); applySettings(); renderThemeSeg();
+    });
+  });
+
+  document.getElementById("dimSlider").addEventListener("input", function(e){
+    DB.settings.bgDim = parseFloat(e.target.value); saveData(); applySettings();
+  });
+  document.getElementById("blurSlider").addEventListener("input", function(e){
+    DB.settings.bgBlur = parseFloat(e.target.value); saveData(); applySettings();
+  });
+  document.getElementById("cardAlphaSlider").addEventListener("input", function(e){
+    DB.settings.cardAlpha = parseFloat(e.target.value); saveData(); applySettings();
+  });
+
+  document.getElementById("bgUploadBtn").addEventListener("click", function(){
+    document.getElementById("bgUploadInput").click();
+  });
+  document.getElementById("bgUploadInput").addEventListener("change", function(e){
+    var file = e.target.files && e.target.files[0];
+    if(!file) return;
+    var img = new Image();
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      img.onload = function(){
+        var maxDim = 1920;
+        var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        var canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        var ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+        try{
+          DB.settings.customBgDataUrl = dataUrl;
+          saveData();
+          applySettings();
+          renderBgPresetRow();
+        }catch(err){
+          alert("Could not save this image — it may be too large for local storage.");
+        }
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  function openSettingsModal(){
+    renderBgPresetRow();
+    renderAccentRow();
+    renderThemeSeg();
+    document.getElementById("dimSlider").value = DB.settings.bgDim;
+    document.getElementById("blurSlider").value = DB.settings.bgBlur;
+    document.getElementById("cardAlphaSlider").value = DB.settings.cardAlpha;
+    document.getElementById("settingsOverlay").classList.add("open");
+  }
+  document.getElementById("settingsBtn").addEventListener("click", openSettingsModal);
+  document.getElementById("settingsCloseBtn").addEventListener("click", function(){ document.getElementById("settingsOverlay").classList.remove("open"); });
+  document.getElementById("settingsOverlay").addEventListener("click", function(e){ if(e.target === e.currentTarget) e.currentTarget.classList.remove("open"); });
+
+  if(window.matchMedia){
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function(){
+      if(DB.settings.theme === "auto") applySettings();
+    });
+  }
+
+  /* ---------- Export / Import ---------- */
+  document.getElementById("exportBtn").addEventListener("click", function(){
+    var blob = new Blob([JSON.stringify(DB, null, 2)], {type:"application/json"});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = "planner-export-" + todayISO() + ".json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+  document.getElementById("importBtn").addEventListener("click", function(){
+    document.getElementById("importInput").click();
+  });
+  document.getElementById("importInput").addEventListener("change", function(e){
+    var file = e.target.files && e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var parsed = JSON.parse(ev.target.result);
+        if(!parsed || !parsed.sections || !parsed.routines){ throw new Error("invalid"); }
+        if(!confirm("Import will replace all current data. Continue?")) return;
+        DB = parsed;
+        if(!DB.settings) DB.settings = defaultData().settings;
+        if(!DB.completions) DB.completions = {};
+        saveData();
+        applySettings();
+        renderDay();
+        if(state.view === "list") renderListView();
+        document.getElementById("settingsOverlay").classList.remove("open");
+      }catch(err){
+        alert("This file doesn't look like a valid Planner export.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  });
+
+  /* ---------- init ---------- */
+  loadData();
+  applySettings();
+  renderDay();
+
+  window.__planner = { DB: function(){return DB;}, occursOn: occursOn, recurrenceSummary: recurrenceSummary };
+})();
+</script>
+</body>
+</html>
