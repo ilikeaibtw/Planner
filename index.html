@@ -5,11 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Planner">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b0e14">
 <title>Planner</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="icon" href="./icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" onerror="this.remove()">
+<script src="./version.js"></script>
 <style>
   :root{
     --accent: 99,102,241;
@@ -63,7 +69,7 @@
   .app{
     max-width:720px;
     margin:0 auto;
-    padding: 24px 16px 100px;
+    padding: calc(24px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(100px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
     min-height:100dvh;
     position:relative;
   }
@@ -181,13 +187,42 @@
   .empty-state .sub{ font-size:13px; color:var(--text-3); margin-top:6px; }
 
   .fab{
-    position:fixed; right:24px; bottom:28px; width:56px; height:56px; border-radius:50%;
+    position:fixed; right:calc(24px + env(safe-area-inset-right)); bottom:calc(28px + env(safe-area-inset-bottom)); width:56px; height:56px; border-radius:50%;
     background: var(--accent-solid); color:var(--accent-fg); display:flex; align-items:center; justify-content:center;
     font-size:26px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
     transition: transform 150ms var(--ease); z-index:20; border:none;
   }
   .fab:hover{ transform: translateY(-2px) scale(1.03); }
   .fab:active{ transform: scale(0.94); }
+
+  .update-toast{
+    position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(140%);
+    display:flex; align-items:center; gap:14px;
+    background: var(--card-bg); border:1px solid var(--card-border);
+    backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border-radius: 999px; padding: 10px 10px 10px 18px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+    z-index: 60; transition: transform 320ms var(--ease); max-width: calc(100vw - 32px);
+  }
+  .update-toast.show{ transform: translateX(-50%) translateY(0); }
+  .update-toast span{ font-size:13.5px; color:var(--text-1); white-space:nowrap; }
+  .update-toast button{
+    border:none; cursor:pointer; border-radius:999px; padding:8px 16px; font-size:13px; font-weight:700;
+    background: var(--accent-solid); color:var(--accent-fg); white-space:nowrap;
+    transition: transform 150ms var(--ease);
+  }
+  .update-toast button:hover{ transform: translateY(-1px); }
+  @media (prefers-reduced-motion: reduce){
+    .update-toast{ transition:none; }
+  }
+  .sync-status-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+  .sync-status-dot.synced{ background:#10b981; }
+  .sync-status-dot.syncing{ background:#f59e0b; animation: pulse-dot 1.2s infinite ease-in-out; }
+  .sync-status-dot.offline{ background:#9ca3af; }
+  .sync-status-dot.error{ background:#ef4444; }
+  @keyframes pulse-dot{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+  .app-version-label{ text-align:center; font-size:11px; color:var(--text-2); opacity:0.6; margin-top:18px; letter-spacing:0.02em; }
 
   ::-webkit-scrollbar{ width:0; height:0; }
 
@@ -224,7 +259,7 @@
   .sheet-title{ font-size:18px; font-weight:800; }
   .field{ margin-bottom:16px; }
   .field label{ display:block; font-size:12.5px; font-weight:700; color:var(--text-2); text-transform:uppercase; letter-spacing:0.03em; margin-bottom:6px; }
-  .field input[type=text], .field input[type=date], .field input[type=number], .field textarea, .field select{
+  .field input[type=text], .field input[type=date], .field input[type=number], .field input[type=email], .field textarea, .field select{
     width:100%; padding:11px 12px; border-radius:12px; border:1px solid var(--card-border);
     background: rgba(255,255,255,0.06); color: var(--text-1); font-size:14.5px; font-family:inherit;
     transition: border-color 150ms;
@@ -455,9 +490,43 @@
       <button type="button" class="btn btn-secondary" id="importBtn">Import</button>
     </div>
     <input type="file" id="importInput" accept="application/json" style="display:none;">
+
+    <div class="field" style="margin-top:22px; border-top:1px solid var(--card-border); padding-top:18px;">
+      <label>Sync (optional)</label>
+      <div id="syncUnconfigured">
+        <div style="font-size:12.5px; color:var(--text-2); margin-bottom:10px; line-height:1.5;">
+          Sync your planner across devices with a free Supabase project. Off by default — the app works fully without it. See SYNC_SETUP.md.
+        </div>
+        <input type="text" id="syncUrlInput" placeholder="Supabase project URL" style="width:100%; margin-bottom:8px;" class="text-input">
+        <input type="text" id="syncKeyInput" placeholder="Supabase anon (publishable) key" style="width:100%; margin-bottom:8px;" class="text-input">
+        <button type="button" class="btn btn-secondary" id="syncSaveConfigBtn" style="width:100%;">Save connection</button>
+      </div>
+      <div id="syncConfigured" style="display:none;">
+        <div id="syncSignedOut">
+          <input type="email" id="syncEmailInput" placeholder="you@email.com" style="width:100%; margin-bottom:8px;" class="text-input">
+          <button type="button" class="btn btn-secondary" id="syncMagicLinkBtn" style="width:100%;">Send magic link</button>
+          <div id="syncMagicLinkStatus" style="font-size:12px; color:var(--text-2); margin-top:6px;"></div>
+        </div>
+        <div id="syncSignedIn" style="display:none;">
+          <div style="font-size:13px; margin-bottom:6px;"><span class="sync-status-dot offline" id="syncStatusDot"></span><span id="syncStatusText">Offline</span></div>
+          <div style="font-size:12px; color:var(--text-2); margin-bottom:10px;">Signed in as <span id="syncEmailLabel"></span> · last synced <span id="syncLastSynced">never</span></div>
+          <button type="button" class="btn btn-secondary" id="syncNowBtn" style="width:100%; margin-bottom:8px;">Sync now</button>
+          <button type="button" class="btn btn-secondary" id="syncSignOutBtn" style="width:100%;">Sign out</button>
+        </div>
+        <button type="button" class="btn btn-secondary" id="syncForgetBtn" style="width:100%; margin-top:8px;">Remove sync connection</button>
+      </div>
+    </div>
+
+    <div class="app-version-label" id="appVersionLabel"></div>
   </div>
 </div>
 
+<div class="update-toast" id="updateToast">
+  <span>New version available</span>
+  <button type="button" id="updateToastBtn">Update</button>
+</div>
+
+<script src="./sync.js"></script>
 <script>
 (function(){
   "use strict";
@@ -494,35 +563,39 @@
     return isoFromDate(d);
   }
 
+  var CURRENT_SCHEMA_VERSION = 2;
+
   function defaultData(){
     var today = todayISO();
+    var now = new Date().toISOString();
     return {
       version: 1,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       sections: [
-        { id: "sec-workout", name: "Workout", emoji: "🏋️", color: "#f97316", order: 0 },
-        { id: "sec-reading", name: "Reading", emoji: "📚", color: "#6366f1", order: 1 },
-        { id: "sec-habits", name: "Daily habits", emoji: "✨", color: "#10b981", order: 2 }
+        { id: "sec-workout", name: "Workout", emoji: "🏋️", color: "#f97316", order: 0, deleted: false, updatedAt: now },
+        { id: "sec-reading", name: "Reading", emoji: "📚", color: "#6366f1", order: 1, deleted: false, updatedAt: now },
+        { id: "sec-habits", name: "Daily habits", emoji: "✨", color: "#10b981", order: 2, deleted: false, updatedAt: now }
       ],
       routines: [
         {
           id: uid(), title: "Workout A", sectionId: "sec-workout",
           detail: "Full body strength", startDate: today, endDate: null,
-          recurrence: { type: "everyN", n: 2 }, note: "", createdAt: today
+          recurrence: { type: "everyN", n: 2 }, note: "", createdAt: today, deleted: false, updatedAt: now
         },
         {
           id: uid(), title: "Mobility", sectionId: "sec-workout",
           detail: "15 min stretch", startDate: today, endDate: null,
-          recurrence: { type: "weekdays", days: [2,5] }, note: "", createdAt: today
+          recurrence: { type: "weekdays", days: [2,5] }, note: "", createdAt: today, deleted: false, updatedAt: now
         },
         {
           id: uid(), title: "Read 10 pages", sectionId: "sec-reading",
           detail: "Crime and Punishment", startDate: today, endDate: null,
-          recurrence: { type: "daily" }, note: "", createdAt: today
+          recurrence: { type: "daily" }, note: "", createdAt: today, deleted: false, updatedAt: now
         },
         {
           id: uid(), title: "Classic novel", sectionId: "sec-reading",
           detail: "Weekend deep read", startDate: today, endDate: null,
-          recurrence: { type: "weekdays", days: [0,6] }, note: "", createdAt: today
+          recurrence: { type: "weekdays", days: [0,6] }, note: "", createdAt: today, deleted: false, updatedAt: now
         }
       ],
       completions: {},
@@ -533,9 +606,38 @@
         customBgDataUrl: null,
         bgDim: 0.35,
         bgBlur: 0,
-        cardAlpha: 0.55
+        cardAlpha: 0.55,
+        updatedAt: now,
+        sync: { url: "", anonKey: "" }
       }
     };
+  }
+
+  /* Upgrades older stored shapes to the current schema, in place. Safe to call
+     repeatedly (idempotent) and on data that is already current. */
+  function migrate(db){
+    if(!db.schemaVersion){
+      // Pre-schemaVersion data (v1.0 of the app): add sync-related fields
+      // without touching anything the user already sees.
+      var now = new Date().toISOString();
+      (db.sections||[]).forEach(function(s){
+        if(typeof s.deleted === "undefined") s.deleted = false;
+        if(!s.updatedAt) s.updatedAt = now;
+      });
+      (db.routines||[]).forEach(function(r){
+        if(typeof r.deleted === "undefined") r.deleted = false;
+        if(!r.updatedAt) r.updatedAt = now;
+      });
+      Object.keys(db.completions||{}).forEach(function(k){
+        var c = db.completions[k];
+        if(c === true){ db.completions[k] = { done: true, updatedAt: now }; }
+      });
+      if(db.settings && !db.settings.updatedAt) db.settings.updatedAt = now;
+      if(db.settings && !db.settings.sync) db.settings.sync = { url: "", anonKey: "" };
+      db.schemaVersion = 2;
+    }
+    // Future migrations: if(db.schemaVersion < 3){ ... db.schemaVersion = 3; }
+    return db;
   }
 
   var DB = null;
@@ -546,7 +648,8 @@
       if(!raw) { DB = defaultData(); saveData(); return DB; }
       var parsed = JSON.parse(raw);
       if(!parsed || !parsed.sections || !parsed.routines){ DB = defaultData(); saveData(); return DB; }
-      DB = parsed;
+      DB = migrate(parsed);
+      saveData();
       return DB;
     }catch(e){
       console.warn("planner: failed to load, resetting", e);
@@ -555,6 +658,8 @@
       return DB;
     }
   }
+
+  function touchSettings(){ DB.settings.updatedAt = new Date().toISOString(); }
 
   function saveData(){
     try{
@@ -633,10 +738,15 @@
   }
 
   function completionKey(routineId, iso){ return routineId + "|" + iso; }
-  function isDone(routineId, iso){ return !!DB.completions[completionKey(routineId, iso)]; }
+  function isDone(routineId, iso){
+    var c = DB.completions[completionKey(routineId, iso)];
+    if(!c) return false;
+    if(c === true) return true; // legacy boolean shape
+    return !!c.done;
+  }
 
   function tasksForDate(iso){
-    return DB.routines.filter(function(r){ return occursOn(r, iso); });
+    return DB.routines.filter(function(r){ return !r.deleted && occursOn(r, iso); });
   }
 
   function renderWeekStrip(){
@@ -685,7 +795,7 @@
       return;
     }
 
-    var sections = DB.sections.slice().sort(function(a,b){ return a.order-b.order; });
+    var sections = DB.sections.filter(function(s){ return !s.deleted; }).sort(function(a,b){ return a.order-b.order; });
     sections.forEach(function(sec){
       var secTasks = tasks.filter(function(t){ return t.sectionId === sec.id; });
       if(secTasks.length === 0) return;
@@ -715,10 +825,11 @@
 
   function toggleDone(routineId){
     var key = completionKey(routineId, state.selectedDate);
-    if(DB.completions[key]) delete DB.completions[key];
-    else DB.completions[key] = true;
+    var wasDone = isDone(routineId, state.selectedDate);
+    DB.completions[key] = { done: !wasDone, updatedAt: new Date().toISOString() };
     saveData();
     renderDay();
+    schedulePush();
   }
 
   var prefersReducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -799,7 +910,7 @@
   var editingRoutineId = null;
   var currentRecurType = "daily";
 
-  function sortedSections(){ return DB.sections.slice().sort(function(a,b){return a.order-b.order;}); }
+  function sortedSections(){ return DB.sections.filter(function(s){ return !s.deleted; }).sort(function(a,b){return a.order-b.order;}); }
 
   function populateSectionSelect(){
     var sel = document.getElementById("f-section");
@@ -949,29 +1060,33 @@
       recurrence: recurrence,
       note: document.getElementById("f-note").value.trim()
     };
+    data.updatedAt = new Date().toISOString();
     if(editingRoutineId){
       var r = DB.routines.find(function(x){ return x.id === editingRoutineId; });
       if(r) Object.assign(r, data);
     } else {
       data.id = uid();
       data.createdAt = todayISO();
+      data.deleted = false;
       DB.routines.push(data);
     }
     saveData();
     closeRoutineModal();
     renderDay();
     if(state.view === "list") renderListView();
+    schedulePush();
   });
 
   document.getElementById("deleteRoutineBtn").addEventListener("click", function(){
     if(!editingRoutineId) return;
     if(!confirm("Delete this routine? This cannot be undone.")) return;
-    DB.routines = DB.routines.filter(function(r){ return r.id !== editingRoutineId; });
-    Object.keys(DB.completions).forEach(function(k){ if(k.indexOf(editingRoutineId+"|") === 0) delete DB.completions[k]; });
+    var r = DB.routines.find(function(x){ return x.id === editingRoutineId; });
+    if(r){ r.deleted = true; r.updatedAt = new Date().toISOString(); }
     saveData();
     closeRoutineModal();
     renderDay();
     if(state.view === "list") renderListView();
+    schedulePush();
   });
 
   /* ---------- Section management ---------- */
@@ -993,39 +1108,45 @@
         '<button class="mini-btn" data-role="down" title="Move down">↓</button>' +
         '<button class="mini-btn" data-role="del" title="Delete">✕</button>';
       row.querySelector('[data-role="name"]').addEventListener("change", function(e){
-        sec.name = e.target.value.trim() || sec.name; saveData(); renderDay();
+        sec.name = e.target.value.trim() || sec.name; sec.updatedAt = new Date().toISOString(); saveData(); renderDay(); schedulePush();
       });
       row.querySelector('[data-role="emoji"]').addEventListener("click", function(){
         var i = SECTION_EMOJIS.indexOf(sec.emoji);
         sec.emoji = SECTION_EMOJIS[(i+1+SECTION_EMOJIS.length) % SECTION_EMOJIS.length];
-        saveData(); renderSectionsList(); renderDay();
+        sec.updatedAt = new Date().toISOString();
+        saveData(); renderSectionsList(); renderDay(); schedulePush();
       });
       row.querySelector('[data-role="color"]').addEventListener("click", function(){
         var i = SECTION_COLORS.indexOf(sec.color);
         sec.color = SECTION_COLORS[(i+1+SECTION_COLORS.length) % SECTION_COLORS.length];
-        saveData(); renderSectionsList(); renderDay();
+        sec.updatedAt = new Date().toISOString();
+        saveData(); renderSectionsList(); renderDay(); schedulePush();
       });
       row.querySelector('[data-role="up"]').addEventListener("click", function(){
         if(idx === 0) return;
         var arr = sortedSections(); var prev = arr[idx-1];
         var tmp = sec.order; sec.order = prev.order; prev.order = tmp;
-        saveData(); renderSectionsList(); renderDay();
+        sec.updatedAt = new Date().toISOString(); prev.updatedAt = new Date().toISOString();
+        saveData(); renderSectionsList(); renderDay(); schedulePush();
       });
       row.querySelector('[data-role="down"]').addEventListener("click", function(){
         var arr = sortedSections();
         if(idx === arr.length-1) return;
         var next = arr[idx+1];
         var tmp = sec.order; sec.order = next.order; next.order = tmp;
-        saveData(); renderSectionsList(); renderDay();
+        sec.updatedAt = new Date().toISOString(); next.updatedAt = new Date().toISOString();
+        saveData(); renderSectionsList(); renderDay(); schedulePush();
       });
       row.querySelector('[data-role="del"]').addEventListener("click", function(){
-        var count = DB.routines.filter(function(r){ return r.sectionId === sec.id; }).length;
+        var count = DB.routines.filter(function(r){ return r.sectionId === sec.id && !r.deleted; }).length;
         var msg = count > 0 ? ("Delete '" + sec.name + "' and its " + count + " routine(s)?") : ("Delete '" + sec.name + "'?");
         if(!confirm(msg)) return;
-        DB.routines = DB.routines.filter(function(r){ return r.sectionId !== sec.id; });
-        DB.sections = DB.sections.filter(function(s){ return s.id !== sec.id; });
+        var now = new Date().toISOString();
+        DB.routines.forEach(function(r){ if(r.sectionId === sec.id){ r.deleted = true; r.updatedAt = now; } });
+        sec.deleted = true; sec.updatedAt = now;
         saveData(); renderSectionsList(); renderDay();
         if(state.view === "list") renderListView();
+        schedulePush();
       });
       el.appendChild(row);
     });
@@ -1033,8 +1154,8 @@
 
   document.getElementById("addSectionBtn").addEventListener("click", function(){
     var maxOrder = DB.sections.reduce(function(m,s){ return Math.max(m,s.order); }, -1);
-    DB.sections.push({ id: uid(), name: "New section", emoji: "✨", color: "#6366f1", order: maxOrder+1 });
-    saveData(); renderSectionsList();
+    DB.sections.push({ id: uid(), name: "New section", emoji: "✨", color: "#6366f1", order: maxOrder+1, deleted: false, updatedAt: new Date().toISOString() });
+    saveData(); renderSectionsList(); schedulePush();
   });
   document.getElementById("sectionsCloseBtn").addEventListener("click", function(){ sectionsOverlay.classList.remove("open"); renderDay(); if(state.view==="list") renderListView(); });
   sectionsOverlay.addEventListener("click", function(e){ if(e.target === sectionsOverlay){ sectionsOverlay.classList.remove("open"); renderDay(); if(state.view==="list") renderListView(); } });
@@ -1044,11 +1165,12 @@
     var el = document.getElementById("listView");
     el.innerHTML = '<div class="sheet-head" style="margin-bottom:14px;"><div class="sheet-title">All routines</div><button class="pillbtn" id="manageSectionsBtn">Manage sections</button></div>';
     var sections = sortedSections();
-    if(DB.routines.length === 0){
+    var liveRoutines = DB.routines.filter(function(r){ return !r.deleted; });
+    if(liveRoutines.length === 0){
       el.innerHTML += '<div class="empty-state"><div class="emoji">🗒️</div><div class="msg">No routines yet</div><div class="sub">Tap + to add your first one.</div></div>';
     }
     sections.forEach(function(sec){
-      var routines = DB.routines.filter(function(r){ return r.sectionId === sec.id; });
+      var routines = liveRoutines.filter(function(r){ return r.sectionId === sec.id; });
       if(routines.length === 0) return;
       var block = document.createElement("div");
       block.className = "section-block";
@@ -1186,7 +1308,7 @@
         sw.addEventListener("click", function(){
           DB.settings.background = key;
           DB.settings.customBgDataUrl = null;
-          saveData(); applySettings(); renderBgPresetRow();
+          touchSettings(); saveData(); applySettings(); schedulePush(); renderBgPresetRow();
         });
         row.appendChild(sw);
       });
@@ -1201,14 +1323,14 @@
       sw.className = "color-pick" + (DB.settings.accent === c ? " active" : "");
       sw.style.background = c;
       sw.addEventListener("click", function(){
-        DB.settings.accent = c; saveData(); applySettings(); renderAccentRow();
+        DB.settings.accent = c; touchSettings(); saveData(); applySettings(); schedulePush(); renderAccentRow();
       });
       row.appendChild(sw);
     });
     var custom = document.createElement("input");
     custom.type = "color"; custom.value = DB.settings.accent;
     custom.style.width = "28px"; custom.style.height = "28px"; custom.style.border = "none"; custom.style.borderRadius = "50%"; custom.style.padding = "0"; custom.style.cursor = "pointer";
-    custom.addEventListener("input", function(){ DB.settings.accent = custom.value; saveData(); applySettings(); renderAccentRow(); });
+    custom.addEventListener("input", function(){ DB.settings.accent = custom.value; touchSettings(); saveData(); applySettings(); schedulePush(); renderAccentRow(); });
     row.appendChild(custom);
   }
 
@@ -1221,18 +1343,18 @@
   document.querySelectorAll("#themeSeg .seg-btn").forEach(function(b){
     b.addEventListener("click", function(){
       DB.settings.theme = b.dataset.theme;
-      saveData(); applySettings(); renderThemeSeg();
+      touchSettings(); saveData(); applySettings(); schedulePush(); renderThemeSeg();
     });
   });
 
   document.getElementById("dimSlider").addEventListener("input", function(e){
-    DB.settings.bgDim = parseFloat(e.target.value); saveData(); applySettings();
+    DB.settings.bgDim = parseFloat(e.target.value); touchSettings(); saveData(); applySettings(); schedulePush();
   });
   document.getElementById("blurSlider").addEventListener("input", function(e){
-    DB.settings.bgBlur = parseFloat(e.target.value); saveData(); applySettings();
+    DB.settings.bgBlur = parseFloat(e.target.value); touchSettings(); saveData(); applySettings(); schedulePush();
   });
   document.getElementById("cardAlphaSlider").addEventListener("input", function(e){
-    DB.settings.cardAlpha = parseFloat(e.target.value); saveData(); applySettings();
+    DB.settings.cardAlpha = parseFloat(e.target.value); touchSettings(); saveData(); applySettings(); schedulePush();
   });
 
   document.getElementById("bgUploadBtn").addEventListener("click", function(){
@@ -1255,8 +1377,10 @@
         var dataUrl = canvas.toDataURL("image/jpeg", 0.8);
         try{
           DB.settings.customBgDataUrl = dataUrl;
+          touchSettings();
           saveData();
           applySettings();
+          schedulePush();
           renderBgPresetRow();
         }catch(err){
           alert("Could not save this image — it may be too large for local storage.");
@@ -1275,6 +1399,7 @@
     document.getElementById("blurSlider").value = DB.settings.bgBlur;
     document.getElementById("cardAlphaSlider").value = DB.settings.cardAlpha;
     document.getElementById("settingsOverlay").classList.add("open");
+    if (window.PlannerSyncUI) window.PlannerSyncUI.refreshPanel();
   }
   document.getElementById("settingsBtn").addEventListener("click", openSettingsModal);
   document.getElementById("settingsCloseBtn").addEventListener("click", function(){ document.getElementById("settingsOverlay").classList.remove("open"); });
@@ -1310,6 +1435,7 @@
         DB = parsed;
         if(!DB.settings) DB.settings = defaultData().settings;
         if(!DB.completions) DB.completions = {};
+        DB = migrate(DB);
         saveData();
         applySettings();
         renderDay();
@@ -1323,10 +1449,212 @@
     e.target.value = "";
   });
 
+  /* ---------- Update mechanism (service worker) ---------- */
+  var swRegistration = null;
+  function showUpdateToast(){
+    document.getElementById("updateToast").classList.add("show");
+  }
+  function hideUpdateToast(){
+    document.getElementById("updateToast").classList.remove("show");
+  }
+  document.getElementById("updateToastBtn").addEventListener("click", function(){
+    if(swRegistration && swRegistration.waiting){
+      swRegistration.waiting.postMessage({ type: "SKIP_WAITING" });
+    } else {
+      window.location.reload();
+    }
+  });
+  if("serviceWorker" in navigator){
+    navigator.serviceWorker.register("./sw.js").then(function(reg){
+      swRegistration = reg;
+      if(reg.waiting && navigator.serviceWorker.controller){ showUpdateToast(); }
+      reg.addEventListener("updatefound", function(){
+        var newWorker = reg.installing;
+        if(!newWorker) return;
+        newWorker.addEventListener("statechange", function(){
+          if(newWorker.state === "installed" && navigator.serviceWorker.controller){
+            showUpdateToast();
+          }
+        });
+      });
+    }).catch(function(e){ console.warn("planner: SW registration failed", e); });
+
+    var reloadedForUpdate = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function(){
+      if(reloadedForUpdate) return;
+      reloadedForUpdate = true;
+      window.location.reload();
+    });
+
+    function checkForUpdate(){ if(swRegistration) swRegistration.update().catch(function(){}); }
+    document.addEventListener("visibilitychange", function(){
+      if(document.visibilityState === "visible") checkForUpdate();
+    });
+    window.addEventListener("focus", checkForUpdate);
+  }
+
+  /* ---------- Cloud sync (optional, off by default) ---------- */
+  var syncClient = null;         // supabase-js client, created lazily once configured
+  var syncPushTimer = null;
+  var syncing = false;
+
+  function setSyncStatus(status /* synced|syncing|offline|error */){
+    var dot = document.getElementById("syncStatusDot");
+    var text = document.getElementById("syncStatusText");
+    if(!dot) return;
+    dot.className = "sync-status-dot " + status;
+    text.textContent = { synced:"Synced", syncing:"Syncing…", offline:"Offline", error:"Sync error" }[status] || status;
+  }
+
+  function syncConfigured(){
+    var s = DB.settings.sync;
+    return !!(s && s.url && s.anonKey);
+  }
+
+  function loadSupabaseLib(){
+    if(window.supabase) return Promise.resolve(window.supabase);
+    return new Promise(function(resolve, reject){
+      var script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+      script.onload = function(){ resolve(window.supabase); };
+      script.onerror = function(){ reject(new Error("Failed to load supabase-js (offline?)")); };
+      document.head.appendChild(script);
+    });
+  }
+
+  function getSyncClient(){
+    if(syncClient) return Promise.resolve(syncClient);
+    if(!syncConfigured()) return Promise.reject(new Error("Sync not configured"));
+    return loadSupabaseLib().then(function(sb){
+      syncClient = sb.createClient(DB.settings.sync.url, DB.settings.sync.anonKey);
+      return syncClient;
+    });
+  }
+
+  function schedulePush(){
+    if(!syncConfigured()) return;
+    if(syncPushTimer) clearTimeout(syncPushTimer);
+    syncPushTimer = setTimeout(function(){ syncNow(); }, 2000);
+  }
+
+  function pullRemoteState(client, userId){
+    return client.from("planner_state").select("data,updated_at").eq("user_id", userId).maybeSingle()
+      .then(function(res){
+        if(res.error) throw res.error;
+        return res.data ? res.data.data : null;
+      });
+  }
+
+  function pushMergedState(client, userId, merged){
+    return client.from("planner_state").upsert({
+      user_id: userId, data: merged, updated_at: new Date().toISOString()
+    }).then(function(res){ if(res.error) throw res.error; });
+  }
+
+  function syncNow(){
+    if(!navigator.onLine){ setSyncStatus("offline"); return Promise.resolve(); }
+    if(!syncConfigured()) return Promise.resolve();
+    if(syncing) return Promise.resolve();
+    return getSyncClient().then(function(client){
+      return client.auth.getUser().then(function(userRes){
+        var user = userRes && userRes.data && userRes.data.user;
+        if(!user) return; // not signed in yet
+        syncing = true;
+        setSyncStatus("syncing");
+        return pullRemoteState(client, user.id).then(function(remote){
+          var merged = window.PlannerSync.mergeState(DB, remote);
+          DB = migrate(merged);
+          saveData();
+          renderDay();
+          if(state.view === "list") renderListView();
+          applySettings();
+          return pushMergedState(client, user.id, DB);
+        }).then(function(){
+          syncing = false;
+          setSyncStatus("synced");
+          var lastEl = document.getElementById("syncLastSynced");
+          if(lastEl) lastEl.textContent = new Date().toLocaleString();
+        });
+      });
+    }).catch(function(e){
+      console.warn("planner: sync failed", e);
+      syncing = false;
+      setSyncStatus(navigator.onLine ? "error" : "offline");
+    });
+  }
+
+  var PlannerSyncUI = {
+    refreshPanel: function(){
+      var s = DB.settings.sync || {};
+      var configured = syncConfigured();
+      document.getElementById("syncUnconfigured").style.display = configured ? "none" : "block";
+      document.getElementById("syncConfigured").style.display = configured ? "block" : "none";
+      document.getElementById("syncUrlInput").value = s.url || "";
+      document.getElementById("syncKeyInput").value = s.anonKey || "";
+      if(!configured) return;
+      getSyncClient().then(function(client){
+        return client.auth.getUser();
+      }).then(function(userRes){
+        var user = userRes && userRes.data && userRes.data.user;
+        document.getElementById("syncSignedOut").style.display = user ? "none" : "block";
+        document.getElementById("syncSignedIn").style.display = user ? "block" : "none";
+        if(user){
+          document.getElementById("syncEmailLabel").textContent = user.email || "";
+          setSyncStatus(navigator.onLine ? "synced" : "offline");
+        }
+      }).catch(function(){ setSyncStatus("error"); });
+    }
+  };
+  window.PlannerSyncUI = PlannerSyncUI;
+
+  document.getElementById("syncSaveConfigBtn").addEventListener("click", function(){
+    var url = document.getElementById("syncUrlInput").value.trim();
+    var key = document.getElementById("syncKeyInput").value.trim();
+    if(!url || !key){ alert("Enter both the Supabase project URL and anon key."); return; }
+    DB.settings.sync = { url: url, anonKey: key };
+    touchSettings(); saveData();
+    syncClient = null;
+    PlannerSyncUI.refreshPanel();
+  });
+  document.getElementById("syncForgetBtn").addEventListener("click", function(){
+    if(!confirm("Remove the sync connection on this device? Your local data is kept.")) return;
+    DB.settings.sync = { url: "", anonKey: "" };
+    touchSettings(); saveData();
+    syncClient = null;
+    PlannerSyncUI.refreshPanel();
+  });
+  document.getElementById("syncMagicLinkBtn").addEventListener("click", function(){
+    var email = document.getElementById("syncEmailInput").value.trim();
+    if(!email){ return; }
+    var statusEl = document.getElementById("syncMagicLinkStatus");
+    statusEl.textContent = "Sending…";
+    getSyncClient().then(function(client){
+      return client.auth.signInWithOtp({ email: email, options: { emailRedirectTo: window.location.href.split("#")[0] } });
+    }).then(function(res){
+      if(res.error) throw res.error;
+      statusEl.textContent = "Check your email for the sign-in link.";
+    }).catch(function(e){
+      statusEl.textContent = "Could not send link: " + (e.message || e);
+    });
+  });
+  document.getElementById("syncNowBtn").addEventListener("click", function(){ syncNow(); });
+  document.getElementById("syncSignOutBtn").addEventListener("click", function(){
+    getSyncClient().then(function(client){ return client.auth.signOut(); }).then(function(){
+      PlannerSyncUI.refreshPanel();
+    });
+  });
+
+  window.addEventListener("online", function(){ syncNow(); });
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState === "visible") syncNow();
+  });
+
   /* ---------- init ---------- */
   loadData();
   applySettings();
   renderDay();
+  document.getElementById("appVersionLabel").textContent = "Planner v" + (typeof APP_VERSION !== "undefined" ? APP_VERSION : "?");
+  if(syncConfigured()) syncNow();
 
   window.__planner = { DB: function(){return DB;}, occursOn: occursOn, recurrenceSummary: recurrenceSummary };
 })();
