@@ -71,6 +71,24 @@ self.addEventListener('fetch', function(event){
     return;
   }
 
+  // version.js is how the page (and this worker's own importScripts) knows
+  // what release it's on: it must always be network-first (falling back to
+  // cache only when offline), otherwise a stale cached copy makes update
+  // detection lag forever, and the "new version available" toast can never
+  // clear as expected.
+  if (url.pathname.indexOf('version.js') !== -1) {
+    event.respondWith(
+      fetch(req, { cache: 'no-store' }).then(function(res){
+        if (res && res.ok) {
+          var copy = res.clone();
+          caches.open(CACHE_NAME).then(function(cache){ cache.put(req, copy); });
+        }
+        return res;
+      }).catch(function(){ return caches.match(req); })
+    );
+    return;
+  }
+
   // Same-origin app shell: cache-first, fall back to network, refresh cache in background.
   event.respondWith(
     caches.match(req).then(function(cached){

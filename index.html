@@ -46,22 +46,31 @@
     --page-bg: #f4f5f8;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
-  html,body{height:100%; margin:0; background: var(--page-bg);}
+  html,body{height:100%; margin:0; background: var(--bg-base, var(--page-bg));}
   body{
     margin:0;
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif;
     color: var(--text-1);
-    background: var(--page-bg);
+    background: var(--bg-base, var(--page-bg));
     min-height:100%;
     overflow-x:hidden;
   }
+  /* Fixed layers always overshoot the bottom edge by a fair margin so that on
+     iOS standalone PWAs (where 100lvh/100vh can be a few dozen px short of the
+     real layout viewport, and the home-indicator area shifts things further)
+     there is never a sliver at the bottom where html/body's own background
+     shows through as a different-coloured band. */
   #bg-layer{
-    position:fixed; inset:0; height:100lvh; z-index:-2;
+    position:fixed; top:0; left:0; right:0;
+    bottom: calc(-1 * env(safe-area-inset-bottom, 0px) - 100px);
+    z-index:-2;
     background-size:cover; background-position:center;
     transition: background 400ms var(--ease);
   }
   #bg-dim{
-    position:fixed; inset:0; height:100lvh; z-index:-1;
+    position:fixed; top:0; left:0; right:0;
+    bottom: calc(-1 * env(safe-area-inset-bottom, 0px) - 100px);
+    z-index:-1;
     background: rgba(var(--bg-dim-rgb, 0,0,0), var(--bg-dim));
     backdrop-filter: blur(var(--bg-blur));
     -webkit-backdrop-filter: blur(var(--bg-blur));
@@ -218,6 +227,10 @@
     transition: transform 150ms var(--ease);
   }
   .update-toast button:hover{ transform: translateY(-1px); }
+  .update-toast button#updateToastDismiss{
+    background:transparent; color:var(--text-2); font-size:18px; line-height:1;
+    padding:6px 8px; font-weight:400;
+  }
   @media (prefers-reduced-motion: reduce){
     .update-toast{ transition:none; }
   }
@@ -582,6 +595,7 @@
 <div class="update-toast" id="updateToast">
   <span>New version available</span>
   <button type="button" id="updateToastBtn">Update</button>
+  <button type="button" id="updateToastDismiss" aria-label="Dismiss">&times;</button>
 </div>
 
 <script src="./crypto.js"></script>
@@ -663,7 +677,7 @@
         accent: "#111111",
         background: "ivory",
         customBgDataUrl: null,
-        bgDim: 0.35,
+        bgDim: 0,
         bgBlur: 0,
         cardAlpha: 0.55,
         updatedAt: now,
@@ -1279,22 +1293,22 @@
   }
 
   var BACKGROUND_PRESETS = {
-    "preset-1": { css: "linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)", tone: "dark", label: "Aurora" },
-    "preset-2": { css: "radial-gradient(circle at 30% 20%, #1a1a2e 0%, #16213e 40%, #0f0c29 100%)", tone: "dark", label: "Midnight" },
-    "preset-3": { css: "linear-gradient(135deg, #f6d365 0%, #fda085 60%, #f6a380 100%)", tone: "dark", label: "Sunset" },
-    "preset-4": { css: "linear-gradient(160deg, #0f2027 0%, #203a43 50%, #2c5364 100%)", tone: "dark", label: "Deep Sea" },
-    "preset-5": { css: "linear-gradient(135deg, #a1ffce 0%, #faffd1 100%)", tone: "dark", label: "Mint" },
-    "preset-6": { css: "linear-gradient(135deg, #ff5f6d 0%, #ffc371 100%)", tone: "dark", label: "Coral" },
-    "preset-7": { css: "linear-gradient(160deg, #232526 0%, #414345 100%)", tone: "dark", label: "Slate" },
-    "preset-8": { css: "radial-gradient(circle at 70% 30%, #3a1c71 0%, #d76d77 60%, #ffaf7b 100%)", tone: "dark", label: "Dusk" },
-    "ivory":     { css: lightBg("linear-gradient(160deg, #fffbf2 0%, #faf3e2 55%, #f2e8d2 100%)"), tone: "light", label: "Ivory" },
-    "cream":     { css: lightBg("linear-gradient(160deg, #fffaf0 0%, #f8edd7 55%, #efdfbe 100%)"), tone: "light", label: "Cream" },
-    "eggshell":  { css: lightBg("linear-gradient(160deg, #fdfbf5 0%, #f6f1e5 55%, #ebe3d0 100%)"), tone: "light", label: "Eggshell" },
-    "alabaster": { css: lightBg("radial-gradient(circle at 50% 18%, #ffffff 0%, #f7f3ec 55%, #eae4d6 100%)"), tone: "light", label: "Alabaster" },
-    "bone":      { css: lightBg("linear-gradient(160deg, #f8f5ed 0%, #efe8d9 55%, #e4dac5 100%)"), tone: "light", label: "Bone" },
-    "parchment": { css: lightBg("radial-gradient(circle at 30% 18%, #fbf4e1 0%, #f1e5c7 55%, #e4d3a8 100%)"), tone: "light", label: "Parchment" },
-    "linen":     { css: lightBg("linear-gradient(160deg, #faf7ef 0%, #f0eadd 55%, #e7decb 100%)"), tone: "light", label: "Linen" },
-    "porcelain": { css: lightBg("radial-gradient(circle at 50% 15%, #ffffff 0%, #f5f6f8 55%, #e8eaee 100%)"), tone: "light", label: "Porcelain" }
+    "preset-1": { css: "linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)", tone: "dark", label: "Aurora", base: "#764ba2" },
+    "preset-2": { css: "radial-gradient(circle at 30% 20%, #1a1a2e 0%, #16213e 40%, #0f0c29 100%)", tone: "dark", label: "Midnight", base: "#16213e" },
+    "preset-3": { css: "linear-gradient(135deg, #f6d365 0%, #fda085 60%, #f6a380 100%)", tone: "dark", label: "Sunset", base: "#fda085" },
+    "preset-4": { css: "linear-gradient(160deg, #0f2027 0%, #203a43 50%, #2c5364 100%)", tone: "dark", label: "Deep Sea", base: "#203a43" },
+    "preset-5": { css: "linear-gradient(135deg, #a1ffce 0%, #faffd1 100%)", tone: "dark", label: "Mint", base: "#c9ffdc" },
+    "preset-6": { css: "linear-gradient(135deg, #ff5f6d 0%, #ffc371 100%)", tone: "dark", label: "Coral", base: "#ff9370" },
+    "preset-7": { css: "linear-gradient(160deg, #232526 0%, #414345 100%)", tone: "dark", label: "Slate", base: "#2f3132" },
+    "preset-8": { css: "radial-gradient(circle at 70% 30%, #3a1c71 0%, #d76d77 60%, #ffaf7b 100%)", tone: "dark", label: "Dusk", base: "#d76d77" },
+    "ivory":     { css: lightBg("linear-gradient(160deg, #fffbf2 0%, #faf3e2 55%, #f2e8d2 100%)"), tone: "light", label: "Ivory", base: "#f8efdc" },
+    "cream":     { css: lightBg("linear-gradient(160deg, #fffaf0 0%, #f8edd7 55%, #efdfbe 100%)"), tone: "light", label: "Cream", base: "#f6e9d1" },
+    "eggshell":  { css: lightBg("linear-gradient(160deg, #fdfbf5 0%, #f6f1e5 55%, #ebe3d0 100%)"), tone: "light", label: "Eggshell", base: "#f4efe2" },
+    "alabaster": { css: lightBg("radial-gradient(circle at 50% 18%, #ffffff 0%, #f7f3ec 55%, #eae4d6 100%)"), tone: "light", label: "Alabaster", base: "#f3eee4" },
+    "bone":      { css: lightBg("linear-gradient(160deg, #f8f5ed 0%, #efe8d9 55%, #e4dac5 100%)"), tone: "light", label: "Bone", base: "#eee6d5" },
+    "parchment": { css: lightBg("radial-gradient(circle at 30% 18%, #fbf4e1 0%, #f1e5c7 55%, #e4d3a8 100%)"), tone: "light", label: "Parchment", base: "#f0e4c3" },
+    "linen":     { css: lightBg("linear-gradient(160deg, #faf7ef 0%, #f0eadd 55%, #e7decb 100%)"), tone: "light", label: "Linen", base: "#eee6d7" },
+    "porcelain": { css: lightBg("radial-gradient(circle at 50% 15%, #ffffff 0%, #f5f6f8 55%, #e8eaee 100%)"), tone: "light", label: "Porcelain", base: "#f2f3f5" }
   };
   var BACKGROUND_GROUPS = [
     { keys: ["preset-1","preset-2","preset-3","preset-4","preset-5","preset-6","preset-7","preset-8"] },
@@ -1348,6 +1362,12 @@
     root.style.setProperty("--bg-dim", s.bgDim);
     root.style.setProperty("--bg-dim-rgb", (!s.customBgDataUrl && presetObj.tone === "light") ? "255,253,247" : "0,0,0");
     root.style.setProperty("--bg-blur", s.bgBlur + "px");
+    // Solid fallback so html/body never show a mismatched (e.g. cool grey)
+    // colour through any gap below the fixed background layers.
+    var bgBase = (!s.customBgDataUrl && presetObj.base) ? presetObj.base : (effectiveTheme === "light" ? "#f4f5f8" : "#0b0e14");
+    root.style.setProperty("--bg-base", bgBase);
+    var themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if(themeColorMeta) themeColorMeta.setAttribute("content", bgBase);
     // card translucency
     var alpha = s.cardAlpha;
     var isWarmLight = !s.customBgDataUrl && presetObj.tone === "light" && effectiveTheme === "light";
@@ -1382,11 +1402,20 @@
         sw.style.width = "36px"; sw.style.height = "36px";
         sw.style.border = (DB.settings.background === key && !DB.settings.customBgDataUrl) ? "2px solid var(--text-1)" : "1px solid var(--card-border)";
         sw.addEventListener("click", function(){
+          var previousTone = (!DB.settings.customBgDataUrl && BACKGROUND_PRESETS[DB.settings.background] || {}).tone;
           DB.settings.background = key;
           DB.settings.customBgDataUrl = null;
           if(preset.tone && DB.settings.theme !== "auto" && DB.settings.theme !== preset.tone){
             DB.settings.theme = "auto";
             renderThemeSeg();
+          }
+          // Warm light presets are meant to read as a clean, near-full-strength
+          // colour; a leftover dim from a previous dark preset would just wash
+          // it out toward grey, so switching into a light preset resets it.
+          if(preset.tone === "light" && previousTone !== "light"){
+            DB.settings.bgDim = 0;
+            var dimSliderEl = document.getElementById("dimSlider");
+            if(dimSliderEl) dimSliderEl.value = 0;
           }
           touchSettings(); saveData(); applySettings(); schedulePush(); renderBgPresetRow();
         });
@@ -1544,8 +1573,14 @@
       window.location.reload();
     }
   });
+  document.getElementById("updateToastDismiss").addEventListener("click", function(){
+    hideUpdateToast();
+  });
   if("serviceWorker" in navigator){
-    navigator.serviceWorker.register("./sw.js").then(function(reg){
+    // updateViaCache:'none' stops the browser from ever serving sw.js (or the
+    // version.js it imports) out of its own HTTP cache when checking for
+    // updates, so a version bump on the server is always seen on the next check.
+    navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(function(reg){
       swRegistration = reg;
       if(reg.waiting && navigator.serviceWorker.controller){ showUpdateToast(); }
       reg.addEventListener("updatefound", function(){
@@ -1557,6 +1592,10 @@
           }
         });
       });
+      // Check for an update right away too, not just on later visibility/focus
+      // events — a standalone PWA relaunched from the home screen may not fire
+      // either of those before the user notices a stale toast (or lack of one).
+      reg.update().catch(function(){});
     }).catch(function(e){ console.warn("planner: SW registration failed", e); });
 
     var reloadedForUpdate = false;
