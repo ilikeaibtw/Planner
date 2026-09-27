@@ -563,7 +563,7 @@
     return isoFromDate(d);
   }
 
-  var CURRENT_SCHEMA_VERSION = 2;
+  var CURRENT_SCHEMA_VERSION = 3;
 
   function defaultData(){
     var today = todayISO();
@@ -600,9 +600,9 @@
       ],
       completions: {},
       settings: {
-        theme: "dark",
-        accent: "#6366f1",
-        background: "preset-1",
+        theme: "auto",
+        accent: "#111111",
+        background: "ivory",
         customBgDataUrl: null,
         bgDim: 0.35,
         bgBlur: 0,
@@ -636,7 +636,20 @@
       if(db.settings && !db.settings.sync) db.settings.sync = { url: "", anonKey: "" };
       db.schemaVersion = 2;
     }
-    // Future migrations: if(db.schemaVersion < 3){ ... db.schemaVersion = 3; }
+    if(db.schemaVersion < 3){
+      // Explicit Light/Dark theme saved alongside a conflicting background preset
+      // renders unreadable text (e.g. Dark theme + a light-tone preset like Ivory).
+      // Fall back to Auto so the theme follows the background's tone.
+      var st = db.settings;
+      if(st && !st.customBgDataUrl && (st.theme === "light" || st.theme === "dark")){
+        var p = BACKGROUND_PRESETS[st.background];
+        if(p && p.tone && p.tone !== st.theme){
+          st.theme = "auto";
+        }
+      }
+      db.schemaVersion = 3;
+    }
+    // Future migrations: if(db.schemaVersion < 4){ ... db.schemaVersion = 4; }
     return db;
   }
 
@@ -1256,6 +1269,10 @@
       } else {
         effectiveTheme = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
       }
+    } else if(!s.customBgDataUrl && presetObj && presetObj.tone && presetObj.tone !== s.theme){
+      // Safety net: an explicit theme that conflicts with the background's tone
+      // (e.g. stale saved data) would make text unreadable — follow the background instead.
+      effectiveTheme = presetObj.tone;
     }
     root.setAttribute("data-theme", effectiveTheme);
     // accent
@@ -1308,6 +1325,10 @@
         sw.addEventListener("click", function(){
           DB.settings.background = key;
           DB.settings.customBgDataUrl = null;
+          if(preset.tone && DB.settings.theme !== "auto" && DB.settings.theme !== preset.tone){
+            DB.settings.theme = "auto";
+            renderThemeSeg();
+          }
           touchSettings(); saveData(); applySettings(); schedulePush(); renderBgPresetRow();
         });
         row.appendChild(sw);
