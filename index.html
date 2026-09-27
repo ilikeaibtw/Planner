@@ -46,22 +46,22 @@
     --page-bg: #f4f5f8;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
-  html,body{height:100%;}
+  html,body{height:100%; margin:0; background: var(--page-bg);}
   body{
     margin:0;
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif;
     color: var(--text-1);
     background: var(--page-bg);
-    min-height:100dvh;
+    min-height:100%;
     overflow-x:hidden;
   }
   #bg-layer{
-    position:fixed; inset:0; z-index:-2;
+    position:fixed; inset:0; height:100lvh; z-index:-2;
     background-size:cover; background-position:center;
     transition: background 400ms var(--ease);
   }
   #bg-dim{
-    position:fixed; inset:0; z-index:-1;
+    position:fixed; inset:0; height:100lvh; z-index:-1;
     background: rgba(var(--bg-dim-rgb, 0,0,0), var(--bg-dim));
     backdrop-filter: blur(var(--bg-blur));
     -webkit-backdrop-filter: blur(var(--bg-blur));
@@ -70,8 +70,8 @@
   .app{
     max-width:720px;
     margin:0 auto;
-    padding: calc(24px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(100px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
-    min-height:100dvh;
+    padding: 0 calc(16px + env(safe-area-inset-right)) calc(100px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+    min-height:100%;
     position:relative;
   }
   .glass{
@@ -84,7 +84,11 @@
   }
   .topbar{
     display:flex; align-items:center; justify-content:space-between;
-    margin-bottom: 18px;
+    position: sticky; top:0; z-index:30;
+    padding-top: calc(24px + env(safe-area-inset-top));
+    padding-bottom: 14px;
+    margin-bottom: 4px;
+    background: var(--page-bg);
   }
   .topbar .brand{ font-weight:800; font-size:15px; letter-spacing:0.02em; color:var(--text-2); text-transform:uppercase; }
   .iconbtn{
@@ -234,7 +238,7 @@
 
   @media (max-width: 420px){
     .date-main{ font-size:24px; }
-    .app{ padding: 18px 14px 100px; }
+    .app{ padding: 0 calc(14px + env(safe-area-inset-right)) calc(100px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left)); }
   }
 
   /* ---- modal / sheet ---- */
@@ -246,7 +250,8 @@
   .overlay.open{ opacity:1; pointer-events:auto; }
   @media (min-width:640px){ .overlay{ align-items:center; } }
   .sheet{
-    width:100%; max-width:520px; max-height:88vh; overflow-y:auto;
+    width:100%; max-width:520px; max-height: calc(100% - env(safe-area-inset-top) - 12px); overflow-y:auto;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
     background: rgba(20,22,30,0.92);
     border: 1px solid var(--card-border);
     border-radius: 24px 24px 0 0;
