@@ -47,15 +47,38 @@ self.addEventListener('message', function(event){
   }
 });
 
+function isFontsHost(hostname){
+  return hostname === 'fonts.googleapis.com' || hostname === 'fonts.gstatic.com';
+}
+
+function endsWith(str, suffix){
+  return str.length >= suffix.length && str.indexOf(suffix, str.length - suffix.length) !== -1;
+}
+
+function isSupabaseHost(hostname){
+  return endsWith(hostname, '.supabase.co') || endsWith(hostname, '.supabase.in');
+}
+
 self.addEventListener('fetch', function(event){
   var req = event.request;
   if (req.method !== 'GET') return;
+  // Never intercept requests carrying an Authorization header (Supabase auth/rest
+  // calls, or anything else auth'd): those must always go straight to the network,
+  // never be served from or written into a cache.
+  if (req.headers && req.headers.has && req.headers.has('Authorization')) return;
 
   var url = new URL(req.url);
 
-  // Cross-origin (e.g. supabase-js CDN, Google Fonts): cache-first, then network,
-  // so once loaded it also works offline.
   if (url.origin !== self.location.origin) {
+    // Supabase REST/auth/realtime endpoints must NEVER be cached: caching a GET
+    // to planner_state or /auth/v1/user would make sync read stale data forever.
+    // Just pass through to the network untouched.
+    if (isSupabaseHost(url.hostname)) return;
+
+    // Only Google Fonts are safe to runtime-cache; everything else cross-origin
+    // (anything unexpected) also passes straight through rather than being cached.
+    if (!isFontsHost(url.hostname)) return;
+
     event.respondWith(
       caches.match(req).then(function(cached){
         if (cached) return cached;

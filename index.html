@@ -97,8 +97,16 @@
     padding-top: calc(24px + env(safe-area-inset-top));
     padding-bottom: 14px;
     margin-bottom: 4px;
-    background: var(--page-bg);
+    /* Blend with the page background below it (the active preset's --bg-base)
+       instead of a hard-coded grey, so the status-bar region reads as one
+       continuous surface rather than a mismatched bar. */
+    background: rgba(var(--bg-base-rgb, 244,245,248), 0.72);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border-bottom: 1px solid transparent;
+    transition: border-color 200ms var(--ease);
   }
+  .topbar.is-scrolled{ border-bottom-color: var(--card-border); }
   .topbar .brand{ font-weight:800; font-size:15px; letter-spacing:0.02em; color:var(--text-2); text-transform:uppercase; }
   .iconbtn{
     width:40px; height:40px; border-radius:50%;
@@ -208,22 +216,30 @@
   }
   .fab:hover{ transform: translateY(-2px) scale(1.03); }
   .fab:active{ transform: scale(0.94); }
+  /* While the update toast is showing, lift the + button clear of it so the
+     two never overlap (the toast is centered and can span most of the width
+     on narrow phones). */
+  body.update-toast-open .fab{ transform: translateY(-64px); }
+  body.update-toast-open .fab:hover{ transform: translateY(-66px) scale(1.03); }
 
   .update-toast{
-    position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom));
+    position:fixed; left:50%;
+    bottom: calc(16px + env(safe-area-inset-bottom));
     transform: translateX(-50%) translateY(140%);
     display:flex; align-items:center; gap:14px;
-    background: var(--card-bg); border:1px solid var(--card-border);
+    background: var(--bg-base-tinted, var(--card-bg)); border:1px solid var(--card-border);
     backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
     border-radius: 999px; padding: 10px 10px 10px 18px;
     box-shadow: 0 12px 32px rgba(0,0,0,0.35);
-    z-index: 60; transition: transform 320ms var(--ease); max-width: calc(100vw - 32px);
+    z-index: 60; transition: transform 320ms var(--ease);
+    max-width: calc(100% - 32px);
+    box-sizing: border-box;
   }
   .update-toast.show{ transform: translateX(-50%) translateY(0); }
-  .update-toast span{ font-size:13.5px; color:var(--text-1); white-space:nowrap; }
+  .update-toast span{ font-size:13.5px; color:var(--text-1); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .update-toast button{
     border:none; cursor:pointer; border-radius:999px; padding:8px 16px; font-size:13px; font-weight:700;
-    background: var(--accent-solid); color:var(--accent-fg); white-space:nowrap;
+    background: var(--accent-solid); color:var(--accent-fg); white-space:nowrap; flex-shrink:0;
     transition: transform 150ms var(--ease);
   }
   .update-toast button:hover{ transform: translateY(-1px); }
@@ -517,11 +533,17 @@
         <div style="font-size:12.5px; color:var(--text-2); margin-bottom:10px; line-height:1.5;">
           Sync your planner across devices with a free Supabase project. Off by default — the app works fully without it. See SYNC_SETUP.md.
         </div>
-        <input type="text" id="syncUrlInput" placeholder="Supabase project URL" style="width:100%; margin-bottom:8px;" class="text-input">
-        <input type="text" id="syncKeyInput" placeholder="Supabase anon (publishable) key" style="width:100%; margin-bottom:8px;" class="text-input">
-        <button type="button" class="btn btn-secondary" id="syncSaveConfigBtn" style="width:100%;">Save connection</button>
+        <input type="text" id="syncUrlInput" placeholder="Supabase project URL" style="width:100%; margin-bottom:4px;" class="text-input">
+        <div id="syncUrlError" style="display:none; color:#ef4444; font-size:11.5px; margin-bottom:6px; line-height:1.4;"></div>
+        <input type="text" id="syncKeyInput" placeholder="Supabase anon (publishable) key" style="width:100%; margin-bottom:4px;" class="text-input">
+        <div id="syncKeyError" style="display:none; color:#ef4444; font-size:11.5px; margin-bottom:6px; line-height:1.4;"></div>
+        <div id="syncKeyWarning" style="display:none; color:#f59e0b; font-size:11.5px; margin-bottom:6px; line-height:1.4;"></div>
+        <button type="button" class="btn btn-secondary" id="syncSaveConfigBtn" style="width:100%; margin-bottom:8px;">Save connection</button>
+        <button type="button" class="btn btn-secondary" id="syncTestConnBtn" style="width:100%;">Test connection</button>
+        <div id="syncTestConnStatus" style="font-size:12px; color:var(--text-2); margin-top:6px; line-height:1.5;"></div>
       </div>
       <div id="syncConfigured" style="display:none;">
+        <div id="syncHostLabel" style="font-size:11.5px; color:var(--text-3); margin-bottom:8px; word-break:break-all;"></div>
         <div id="syncSignedOut">
           <div class="seg" id="authModeSeg" style="margin-bottom:8px;">
             <div class="seg-btn active" data-mode="signin">Sign in</div>
@@ -589,6 +611,7 @@
     </div>
 
     <div class="app-version-label" id="appVersionLabel"></div>
+    <button type="button" class="btn btn-secondary" id="forceRefreshBtn" style="width:100%; margin-top:8px;">Force refresh app</button>
   </div>
 </div>
 
@@ -1366,6 +1389,9 @@
     // colour through any gap below the fixed background layers.
     var bgBase = (!s.customBgDataUrl && presetObj.base) ? presetObj.base : (effectiveTheme === "light" ? "#f4f5f8" : "#0b0e14");
     root.style.setProperty("--bg-base", bgBase);
+    var bgBaseRgb = hexToRgb(bgBase);
+    root.style.setProperty("--bg-base-rgb", bgBaseRgb);
+    root.style.setProperty("--bg-base-tinted", "rgba(" + bgBaseRgb + ",0.86)");
     var themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if(themeColorMeta) themeColorMeta.setAttribute("content", bgBase);
     // card translucency
@@ -1560,43 +1586,126 @@
 
   /* ---------- Update mechanism (service worker) ---------- */
   var swRegistration = null;
+
+  function hardRefresh(){
+    var cleanup = Promise.resolve();
+    if(window.caches && caches.keys){
+      cleanup = caches.keys().then(function(names){
+        return Promise.all(names.map(function(n){ return caches.delete(n); }));
+      }).catch(function(){});
+    }
+    var unreg = Promise.resolve();
+    if("serviceWorker" in navigator){
+      unreg = navigator.serviceWorker.getRegistrations().then(function(regs){
+        return Promise.all(regs.map(function(r){ return r.unregister().catch(function(){}); }));
+      }).catch(function(){});
+    }
+    Promise.all([cleanup, unreg]).then(function(){
+      // Bust any HTTP-level caching too.
+      window.location.href = window.location.pathname + "?refreshed=" + Date.now() + window.location.hash;
+    }).catch(function(){ window.location.reload(); });
+  }
+
   function showUpdateToast(){
+    document.body.classList.add("update-toast-open");
     document.getElementById("updateToast").classList.add("show");
   }
   function hideUpdateToast(){
+    document.body.classList.remove("update-toast-open");
     document.getElementById("updateToast").classList.remove("show");
   }
   document.getElementById("updateToastBtn").addEventListener("click", function(){
     if(swRegistration && swRegistration.waiting){
+      var reloaded = false;
+      var timeoutId = setTimeout(function(){
+        if(reloaded) return;
+        reloaded = true;
+        hardRefresh();
+      }, 3000);
+      navigator.serviceWorker.addEventListener("controllerchange", function onCC(){
+        navigator.serviceWorker.removeEventListener("controllerchange", onCC);
+        if(reloaded) return;
+        reloaded = true;
+        clearTimeout(timeoutId);
+        window.location.reload();
+      });
       swRegistration.waiting.postMessage({ type: "SKIP_WAITING" });
     } else {
-      window.location.reload();
+      // No waiting worker (or an SW that's stuck/misbehaving): guarantee the
+      // next load is fresh from the network regardless of SW state.
+      hardRefresh();
     }
   });
   document.getElementById("updateToastDismiss").addEventListener("click", function(){
+    // Dismiss for the current fetched/known version only — a later, different
+    // version should still prompt again.
+    try{ localStorage.setItem("planner-update-dismissed-version", lastKnownRemoteVersion || APP_VERSION); }catch(_){}
     hideUpdateToast();
   });
+  document.getElementById("forceRefreshBtn").addEventListener("click", function(){
+    if(!confirm("This clears the app's cached files and reloads from the network. Your data is kept.")) return;
+    hardRefresh();
+  });
+
+  var lastKnownRemoteVersion = null;
+  function dismissedVersion(){
+    try{ return localStorage.getItem("planner-update-dismissed-version"); }catch(_){ return null; }
+  }
+  function maybeShowToastFor(remoteVersion, waitingExists){
+    if(remoteVersion) lastKnownRemoteVersion = remoteVersion;
+    var versionDiffers = !!(remoteVersion && remoteVersion !== APP_VERSION);
+    if(!waitingExists && !versionDiffers) return;
+    var dismissed = dismissedVersion();
+    var key = remoteVersion || "waiting";
+    if(dismissed && dismissed === key) return;
+    showUpdateToast();
+  }
+
+  function fetchRemoteVersion(){
+    return fetch("./version.js?ts=" + Date.now(), { cache: "no-store" }).then(function(res){
+      if(!res.ok) throw new Error("bad status");
+      return res.text();
+    }).then(function(text){
+      var m = /APP_VERSION\s*=\s*['"]([^'"]+)['"]/.exec(text);
+      return m ? m[1] : null;
+    }).catch(function(){ return null; });
+  }
+
+  function checkForUpdate(){
+    var swCheck = swRegistration ? swRegistration.update().catch(function(){}) : Promise.resolve();
+    var waitingExists = !!(swRegistration && swRegistration.waiting);
+    return Promise.all([swCheck, fetchRemoteVersion()]).then(function(results){
+      var remoteVersion = results[1];
+      maybeShowToastFor(remoteVersion, waitingExists || !!(swRegistration && swRegistration.waiting));
+    });
+  }
+
   if("serviceWorker" in navigator){
     // updateViaCache:'none' stops the browser from ever serving sw.js (or the
     // version.js it imports) out of its own HTTP cache when checking for
     // updates, so a version bump on the server is always seen on the next check.
     navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(function(reg){
       swRegistration = reg;
-      if(reg.waiting && navigator.serviceWorker.controller){ showUpdateToast(); }
+      if(reg.waiting && navigator.serviceWorker.controller){ maybeShowToastFor(null, true); }
       reg.addEventListener("updatefound", function(){
         var newWorker = reg.installing;
         if(!newWorker) return;
         newWorker.addEventListener("statechange", function(){
           if(newWorker.state === "installed" && navigator.serviceWorker.controller){
-            showUpdateToast();
+            maybeShowToastFor(null, true);
           }
         });
       });
       // Check for an update right away too, not just on later visibility/focus
       // events — a standalone PWA relaunched from the home screen may not fire
       // either of those before the user notices a stale toast (or lack of one).
-      reg.update().catch(function(){});
-    }).catch(function(e){ console.warn("planner: SW registration failed", e); });
+      checkForUpdate();
+    }).catch(function(e){
+      console.warn("planner: SW registration failed", e);
+      // Even with no usable SW (or one stuck on an old version), version.js
+      // polling alone can still surface the toast so the user can hard-refresh.
+      checkForUpdate();
+    });
 
     var reloadedForUpdate = false;
     navigator.serviceWorker.addEventListener("controllerchange", function(){
@@ -1604,13 +1713,14 @@
       reloadedForUpdate = true;
       window.location.reload();
     });
-
-    function checkForUpdate(){ if(swRegistration) swRegistration.update().catch(function(){}); }
-    document.addEventListener("visibilitychange", function(){
-      if(document.visibilityState === "visible") checkForUpdate();
-    });
-    window.addEventListener("focus", checkForUpdate);
+  } else {
+    checkForUpdate();
   }
+
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState === "visible") checkForUpdate();
+  });
+  window.addEventListener("focus", checkForUpdate);
 
   /* ---------- Cloud sync (optional, off by default) ---------- */
   /* End-to-end encrypted: the server (Supabase) only ever stores the
@@ -1635,6 +1745,34 @@
   function syncConfigured(){
     var s = DB.settings.sync;
     return !!(s && s.url && s.anonKey);
+  }
+
+  var SUPABASE_URL_RE = /^https:\/\/[a-z0-9]{20}\.supabase\.co$/;
+
+  function normalizeSupabaseUrl(raw){
+    var url = (raw || "").replace(/[\r\n]+/g, "").trim();
+    url = url.replace(/\/+$/, "");
+    if(url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+    url = url.replace(/^http:\/\//i, "https://");
+    return url;
+  }
+
+  function hostOf(url){
+    try{ return new URL(url).host; }catch(_){ return url || "Supabase"; }
+  }
+
+  /* Recognizes a network-layer failure (offline, DNS failure, blocked request,
+     CORS misconfiguration) as opposed to a normal auth/API error response, so
+     it can be shown as a clear "can't reach the server" message instead of a
+     raw "Load failed"/"Failed to fetch". */
+  function isNetworkError(e){
+    if(e instanceof TypeError) return true;
+    var msg = ((e && e.message) || String(e || "")).toLowerCase();
+    return msg.indexOf("load failed") !== -1 || msg.indexOf("failed to fetch") !== -1 || msg.indexOf("networkerror") !== -1;
+  }
+
+  function friendlyNetworkError(e, host){
+    return "Can't reach Supabase at " + (host || "the configured host") + ". Check the Project URL and your internet connection.";
   }
 
   function loadSupabaseLib(){
@@ -1734,7 +1872,11 @@
     }).catch(function(e){
       console.warn("planner: sync failed", e);
       syncing = false;
-      if(e && e.code === "locked"){
+      if(isNetworkError(e)){
+        setSyncStatus(navigator.onLine ? "error" : "offline");
+        var syncStatusText = document.getElementById("syncStatusText");
+        if(syncStatusText) syncStatusText.title = friendlyNetworkError(e, hostOf(DB.settings.sync && DB.settings.sync.url));
+      } else if(e && e.code === "locked"){
         setSyncStatus("locked");
       } else if(e && e.code === "wrong-passphrase"){
         // Never push on a decrypt failure - the remote blob is left untouched.
@@ -1765,6 +1907,8 @@
       document.getElementById("syncConfigured").style.display = configured ? "block" : "none";
       document.getElementById("syncUrlInput").value = s.url || "";
       document.getElementById("syncKeyInput").value = s.anonKey || "";
+      var hostLabel = document.getElementById("syncHostLabel");
+      if(hostLabel) hostLabel.textContent = configured ? ("Connected to " + hostOf(s.url)) : "";
       if(!configured) return;
       getSyncClient().then(function(client){
         return client.auth.getUser().then(function(userRes){
@@ -1792,14 +1936,65 @@
   };
   window.PlannerSyncUI = PlannerSyncUI;
 
-  document.getElementById("syncSaveConfigBtn").addEventListener("click", function(){
-    var url = document.getElementById("syncUrlInput").value.trim();
+  function readSyncUrlInput(){
+    var raw = document.getElementById("syncUrlInput").value;
+    var normalized = normalizeSupabaseUrl(raw);
+    var errEl = document.getElementById("syncUrlError");
+    if(normalized && !SUPABASE_URL_RE.test(normalized)){
+      errEl.textContent = "That doesn't look like a Supabase Project URL — it should look like https://xxxx.supabase.co";
+      errEl.style.display = "block";
+      return null;
+    }
+    errEl.style.display = "none";
+    return normalized;
+  }
+
+  function readSyncKeyInput(){
     var key = document.getElementById("syncKeyInput").value.trim();
-    if(!url || !key){ alert("Enter both the Supabase project URL and anon key."); return; }
+    var errEl = document.getElementById("syncKeyError");
+    var warnEl = document.getElementById("syncKeyWarning");
+    errEl.style.display = "none"; warnEl.style.display = "none";
+    if(key.indexOf("sb_secret_") === 0){
+      errEl.textContent = "Never use the secret key here — use the anon/publishable key instead.";
+      errEl.style.display = "block";
+      return null;
+    }
+    if(key && key.indexOf("sb_publishable_") !== 0 && key.indexOf("eyJ") !== 0){
+      warnEl.textContent = "This doesn't look like a Supabase anon/publishable key (expected to start with \"sb_publishable_\" or \"eyJ\").";
+      warnEl.style.display = "block";
+    }
+    return key;
+  }
+
+  document.getElementById("syncUrlInput").addEventListener("blur", function(){
+    var normalized = readSyncUrlInput();
+    if(normalized !== null) this.value = normalized;
+  });
+  document.getElementById("syncKeyInput").addEventListener("blur", readSyncKeyInput);
+
+  document.getElementById("syncSaveConfigBtn").addEventListener("click", function(){
+    var url = readSyncUrlInput();
+    var key = readSyncKeyInput();
+    if(!url || !key){ if(url && !key){ alert("Enter the Supabase anon key."); } return; }
+    document.getElementById("syncUrlInput").value = url;
     DB.settings.sync = { url: url, anonKey: key };
     touchSettings(); saveData();
     syncClient = null;
     PlannerSyncUI.refreshPanel();
+  });
+
+  document.getElementById("syncTestConnBtn").addEventListener("click", function(){
+    var url = readSyncUrlInput();
+    var key = readSyncKeyInput();
+    var statusEl = document.getElementById("syncTestConnStatus");
+    if(!url || !key){ statusEl.textContent = "Enter a valid URL and key first."; return; }
+    statusEl.textContent = "Testing…";
+    fetch(url + "/auth/v1/settings", { headers: { apikey: key } }).then(function(res){
+      if(res.ok){ statusEl.textContent = "OK — reached " + hostOf(url) + " (HTTP " + res.status + ")."; }
+      else { statusEl.textContent = "Reached " + hostOf(url) + " but got HTTP " + res.status + "."; }
+    }).catch(function(e){
+      statusEl.textContent = isNetworkError(e) ? friendlyNetworkError(e, hostOf(url)) : ("Network error: " + (e.message || e));
+    });
   });
   document.getElementById("syncForgetBtn").addEventListener("click", function(){
     if(!confirm("Remove the sync connection on this device? Your local data is kept.")) return;
@@ -1834,6 +2029,10 @@
 
   function friendlyAuthError(e){
     var msg = (e && e.message) || String(e);
+    if(isNetworkError(e)){
+      var host = hostOf(DB.settings.sync && DB.settings.sync.url);
+      return friendlyNetworkError(e, host);
+    }
     var lower = msg.toLowerCase();
     if(lower.indexOf("invalid login credentials") !== -1) return "Incorrect email or password.";
     if(lower.indexOf("email not confirmed") !== -1) return "Confirm your email first — check your inbox.";
@@ -1899,7 +2098,7 @@
       if(codeStatusEl) codeStatusEl.textContent = "";
       document.getElementById("syncCodeEntry").style.display = "block";
     }).catch(function(e){
-      statusEl.textContent = "Could not send code: " + (e.message || e);
+      statusEl.textContent = isNetworkError(e) ? friendlyNetworkError(e, hostOf(DB.settings.sync && DB.settings.sync.url)) : ("Could not send code: " + (e.message || e));
     });
   }
   document.getElementById("syncMagicLinkBtn").addEventListener("click", sendSignInEmail);
@@ -2044,6 +2243,17 @@
   document.addEventListener("visibilitychange", function(){
     if(document.visibilityState === "visible") syncNow();
   });
+
+  /* ---------- topbar scroll hairline ---------- */
+  (function(){
+    var topbarEl = document.querySelector(".topbar");
+    if(!topbarEl) return;
+    function onScroll(){
+      topbarEl.classList.toggle("is-scrolled", window.scrollY > 2);
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  })();
 
   /* ---------- init ---------- */
   loadData();
