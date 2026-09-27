@@ -8,26 +8,27 @@ Supabase never sees them.
 2. In the project, open the **SQL Editor**, paste the contents of `supabase_setup.sql`
    from this folder, and run it. This creates the storage table and locks it so
    each person can only see their own row.
-3. Open **Authentication → URL Configuration**. Set **Site URL** and add it
-   under **Redirect URLs** (e.g. `https://ilikeaibtw.github.io/Planner/`).
+3. Open **Authentication → URL Configuration**. Set **Site URL** to
+   `https://ilikeaibtw.github.io/Planner/` and add it under **Redirect URLs**.
 4. Open **Project Settings → API**. Copy the **Project URL** and **anon key**.
 5. In the Planner app, open the gear icon → **Sync** → paste the URL and key
    into "Save connection".
-6. In Supabase go to **Authentication → Emails → Magic Link** template and
-   add a line showing the code, e.g. `Your code: {{ .Token }}`, then save.
-   Then in the app enter your email and tap **Email me a sign-in code**.
-   Open the email and either tap the link, or type the code into the app —
-   the code also works from an installed home-screen/dock app, where the
-   emailed link opens Safari instead of the app.
-7. Set a **passphrase**. This encrypts your data before it leaves the device.
-   **If you forget it, your cloud copy cannot be recovered — your data on
-   this device is unaffected.** Write it down somewhere safe.
-8. On every other device, repeat steps 5–7, using **Unlock** with the same
-   passphrase instead of "Set up encryption".
+6. Pick **Create account**, enter your email and a password. The free
+   Supabase plan can't customise its email template (needs custom SMTP), so
+   it just sends a confirmation link — that's fine, no setup needed. Tap the
+   link (it may open Safari even on an installed app — normal), then come
+   back and **Sign in** with the same email and password.
+7. On every other device, open Sync and **Sign in** with the same credentials.
+8. Set a **passphrase** (encrypts your data before it leaves the device — if
+   you forget it, your cloud copy cannot be recovered; this device is fine).
+9. On other devices, after signing in, use **Unlock** with that passphrase.
+
+("Use email code instead" still works if you prefer it, but password
+sign-in is recommended for installed apps, since the emailed link/code opens
+in Safari, which has separate storage from an installed home-screen app.)
 
 Sync happens automatically after that: on launch, when you switch back to the
-app, when you come back online, and a couple of seconds after you make a
-change. A lock icon and "End-to-end encrypted" label show when it's active.
+app, when you come back online, and a couple of seconds after a change.
 
 ## What's private
 

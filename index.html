@@ -505,15 +505,33 @@
       </div>
       <div id="syncConfigured" style="display:none;">
         <div id="syncSignedOut">
+          <div class="seg" id="authModeSeg" style="margin-bottom:8px;">
+            <div class="seg-btn active" data-mode="signin">Sign in</div>
+            <div class="seg-btn" data-mode="signup">Create account</div>
+          </div>
           <input type="email" id="syncEmailInput" placeholder="you@email.com" style="width:100%; margin-bottom:8px;" class="text-input">
-          <button type="button" class="btn btn-secondary" id="syncMagicLinkBtn" style="width:100%;">Email me a sign-in code</button>
-          <div id="syncMagicLinkStatus" style="font-size:12px; color:var(--text-2); margin-top:6px;"></div>
-          <div id="syncCodeEntry" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--card-border);">
-            <div style="font-size:12.5px; color:var(--text-2); margin-bottom:8px; line-height:1.5;">Enter the 6-digit code from the email</div>
-            <input type="text" id="syncCodeInput" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="8" style="width:100%; margin-bottom:8px;" class="text-input">
-            <button type="button" class="btn btn-secondary" id="syncVerifyCodeBtn" style="width:100%; margin-bottom:8px;">Verify</button>
-            <div id="syncCodeStatus" style="font-size:12px; color:var(--text-2); margin-bottom:6px;"></div>
-            <a href="#" id="syncResendCodeLink" style="font-size:12px;">Resend code</a>
+          <div style="position:relative; margin-bottom:8px;">
+            <input type="password" id="syncPasswordInput" placeholder="Password" autocomplete="current-password" style="width:100%; padding-right:36px;" class="text-input">
+            <button type="button" id="syncPasswordToggle" aria-label="Show password" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:14px; color:var(--text-2); padding:2px 4px;">👁</button>
+          </div>
+          <input type="password" id="syncPasswordConfirmInput" placeholder="Confirm password" autocomplete="new-password" style="width:100%; margin-bottom:8px; display:none;" class="text-input">
+          <button type="button" class="btn btn-secondary" id="syncAuthSubmitBtn" style="width:100%;">Sign in</button>
+          <div id="syncAuthStatus" style="font-size:12px; color:var(--text-2); margin-top:6px; line-height:1.5;"></div>
+
+          <div style="margin-top:12px; text-align:center;">
+            <a href="#" id="syncUseCodeLink" style="font-size:12px;">Use email code instead</a>
+          </div>
+
+          <div id="syncCodeSection" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--card-border);">
+            <button type="button" class="btn btn-secondary" id="syncMagicLinkBtn" style="width:100%;">Email me a sign-in code</button>
+            <div id="syncMagicLinkStatus" style="font-size:12px; color:var(--text-2); margin-top:6px;"></div>
+            <div id="syncCodeEntry" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--card-border);">
+              <div style="font-size:12.5px; color:var(--text-2); margin-bottom:8px; line-height:1.5;">Enter the 6-digit code from the email</div>
+              <input type="text" id="syncCodeInput" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="8" style="width:100%; margin-bottom:8px;" class="text-input">
+              <button type="button" class="btn btn-secondary" id="syncVerifyCodeBtn" style="width:100%; margin-bottom:8px;">Verify</button>
+              <div id="syncCodeStatus" style="font-size:12px; color:var(--text-2); margin-bottom:6px;"></div>
+              <a href="#" id="syncResendCodeLink" style="font-size:12px;">Resend code</a>
+            </div>
           </div>
         </div>
         <div id="syncSignedIn" style="display:none;">
@@ -1748,6 +1766,81 @@
     PlannerCrypto.forgetKey().catch(function(){});
     PlannerSyncUI.refreshPanel();
   });
+  var authMode = "signin"; // "signin" | "signup"
+  function setAuthMode(mode){
+    authMode = mode;
+    document.querySelectorAll("#authModeSeg .seg-btn").forEach(function(b){
+      b.classList.toggle("active", b.dataset.mode === mode);
+    });
+    document.getElementById("syncPasswordConfirmInput").style.display = mode === "signup" ? "block" : "none";
+    document.getElementById("syncPasswordInput").setAttribute("autocomplete", mode === "signup" ? "new-password" : "current-password");
+    document.getElementById("syncAuthSubmitBtn").textContent = mode === "signup" ? "Create account" : "Sign in";
+  }
+  document.querySelectorAll("#authModeSeg .seg-btn").forEach(function(b){
+    b.addEventListener("click", function(){ setAuthMode(b.dataset.mode); });
+  });
+
+  document.getElementById("syncPasswordToggle").addEventListener("click", function(){
+    var input = document.getElementById("syncPasswordInput");
+    var show = input.type === "password";
+    input.type = show ? "text" : "password";
+    this.textContent = show ? "🙈" : "👁";
+    this.setAttribute("aria-label", show ? "Hide password" : "Show password");
+  });
+
+  function friendlyAuthError(e){
+    var msg = (e && e.message) || String(e);
+    var lower = msg.toLowerCase();
+    if(lower.indexOf("invalid login credentials") !== -1) return "Incorrect email or password.";
+    if(lower.indexOf("email not confirmed") !== -1) return "Confirm your email first — check your inbox.";
+    if(lower.indexOf("password") !== -1 && (lower.indexOf("least") !== -1 || lower.indexOf("weak") !== -1 || lower.indexOf("short") !== -1)) return "Password is too weak — use at least 8 characters.";
+    if(lower.indexOf("rate limit") !== -1 || lower.indexOf("too many") !== -1) return "Too many attempts, wait a minute.";
+    if(lower.indexOf("already registered") !== -1 || lower.indexOf("already exists") !== -1 || lower.indexOf("user already") !== -1) return "An account with that email already exists — sign in instead.";
+    return msg;
+  }
+
+  document.getElementById("syncAuthSubmitBtn").addEventListener("click", function(){
+    var email = document.getElementById("syncEmailInput").value.trim();
+    var password = document.getElementById("syncPasswordInput").value;
+    var statusEl = document.getElementById("syncAuthStatus");
+    if(!email || !password){ statusEl.textContent = "Enter an email and password."; return; }
+    if(password.length < 8){ statusEl.textContent = "Password must be at least 8 characters."; return; }
+    if(authMode === "signup"){
+      var confirmVal = document.getElementById("syncPasswordConfirmInput").value;
+      if(password !== confirmVal){ statusEl.textContent = "Passwords don't match."; return; }
+    }
+    statusEl.textContent = authMode === "signup" ? "Creating account…" : "Signing in…";
+    getSyncClient().then(function(client){
+      if(authMode === "signup"){
+        return client.auth.signUp({ email: email, password: password, options: { emailRedirectTo: window.location.href.split("#")[0] } });
+      }
+      return client.auth.signInWithPassword({ email: email, password: password });
+    }).then(function(res){
+      if(res.error) throw res.error;
+      var session = res.data && res.data.session;
+      if(authMode === "signup" && !session){
+        document.getElementById("syncPasswordInput").value = "";
+        document.getElementById("syncPasswordConfirmInput").value = "";
+        setAuthMode("signin");
+        document.getElementById("syncEmailInput").value = email;
+        statusEl.textContent = "Check your email and tap the confirmation link (it's fine if it opens in Safari). Then come back here and sign in.";
+        return;
+      }
+      statusEl.textContent = "";
+      document.getElementById("syncPasswordInput").value = "";
+      document.getElementById("syncPasswordConfirmInput").value = "";
+      PlannerSyncUI.refreshPanel();
+    }).catch(function(e){
+      statusEl.textContent = friendlyAuthError(e);
+    });
+  });
+
+  document.getElementById("syncUseCodeLink").addEventListener("click", function(e){
+    e.preventDefault();
+    var section = document.getElementById("syncCodeSection");
+    section.style.display = (section.style.display === "none") ? "block" : "none";
+  });
+
   function sendSignInEmail(){
     var email = document.getElementById("syncEmailInput").value.trim();
     if(!email){ return; }
