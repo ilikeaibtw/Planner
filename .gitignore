@@ -1,0 +1,11 @@
+.DS_Store
+node_modules/
+
+# Data exports (may contain personal routine data) - never commit
+planner-backup*.json
+*export*.json
+
+# Local scratch/test files
+*.local.*
+/test/
+/tests/

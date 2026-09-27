@@ -22,3 +22,15 @@ Then open `http://localhost:8000` in a browser. To see the update toast,
 bump `APP_VERSION` in `version.js`, keep the server running, and reload the
 tab (with the old version still open) — the new service worker installs in
 the background and the toast should appear once it's ready.
+
+## Vendored dependencies
+
+`vendor/supabase.js` is the supabase-js v2 UMD build, vendored locally (no
+CDN at runtime, so the app works under a strict CSP and offline once
+installed). Currently pinned to **2.117.2**. To update it:
+
+```
+curl -L https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js -o vendor/supabase.js
+```
+
+Then bump the version noted here and re-test sync before shipping.
