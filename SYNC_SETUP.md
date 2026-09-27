@@ -9,12 +9,16 @@ Supabase never sees them.
    from this folder, and run it. This creates the storage table and locks it so
    each person can only see their own row.
 3. Open **Authentication → URL Configuration**. Set **Site URL** and add it
-   under **Redirect URLs** (e.g. `https://yourname.github.io/planner/`).
+   under **Redirect URLs** (e.g. `https://ilikeaibtw.github.io/Planner/`).
 4. Open **Project Settings → API**. Copy the **Project URL** and **anon key**.
 5. In the Planner app, open the gear icon → **Sync** → paste the URL and key
    into "Save connection".
-6. Enter your email and tap **Send magic link**. Open the email and tap the
-   link — it opens the app and signs you in.
+6. In Supabase go to **Authentication → Emails → Magic Link** template and
+   add a line showing the code, e.g. `Your code: {{ .Token }}`, then save.
+   Then in the app enter your email and tap **Email me a sign-in code**.
+   Open the email and either tap the link, or type the code into the app —
+   the code also works from an installed home-screen/dock app, where the
+   emailed link opens Safari instead of the app.
 7. Set a **passphrase**. This encrypts your data before it leaves the device.
    **If you forget it, your cloud copy cannot be recovered — your data on
    this device is unaffected.** Write it down somewhere safe.
