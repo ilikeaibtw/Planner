@@ -221,6 +221,7 @@
   .sync-status-dot.syncing{ background:#f59e0b; animation: pulse-dot 1.2s infinite ease-in-out; }
   .sync-status-dot.offline{ background:#9ca3af; }
   .sync-status-dot.error{ background:#ef4444; }
+  .sync-status-dot.locked{ background:#6b7280; }
   @keyframes pulse-dot{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
   .app-version-label{ text-align:center; font-size:11px; color:var(--text-2); opacity:0.6; margin-top:18px; letter-spacing:0.02em; }
 
@@ -512,6 +513,32 @@
           <div style="font-size:12px; color:var(--text-2); margin-bottom:10px;">Signed in as <span id="syncEmailLabel"></span> · last synced <span id="syncLastSynced">never</span></div>
           <button type="button" class="btn btn-secondary" id="syncNowBtn" style="width:100%; margin-bottom:8px;">Sync now</button>
           <button type="button" class="btn btn-secondary" id="syncSignOutBtn" style="width:100%;">Sign out</button>
+
+          <div id="syncCryptoSetup" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--card-border);">
+            <div style="font-size:12.5px; color:var(--text-2); margin-bottom:8px; line-height:1.5;">
+              Set a passphrase to encrypt your data before it ever leaves this device. The server only ever sees ciphertext. <strong>If you forget this passphrase, your cloud copy cannot be recovered — your data on this device is unaffected.</strong>
+            </div>
+            <input type="password" id="cryptoNewPassInput" placeholder="New passphrase" style="width:100%; margin-bottom:8px;" class="text-input" autocomplete="new-password">
+            <input type="password" id="cryptoNewPassConfirm" placeholder="Confirm passphrase" style="width:100%; margin-bottom:8px;" class="text-input" autocomplete="new-password">
+            <button type="button" class="btn btn-secondary" id="cryptoSetupBtn" style="width:100%;">Set up encryption</button>
+            <div id="cryptoSetupStatus" style="font-size:12px; color:var(--text-2); margin-top:6px;"></div>
+          </div>
+
+          <div id="syncCryptoLocked" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--card-border);">
+            <div style="font-size:12.5px; color:var(--text-2); margin-bottom:8px;">🔒 Locked — enter your passphrase to sync.</div>
+            <input type="password" id="cryptoPassphraseInput" placeholder="Passphrase" style="width:100%; margin-bottom:8px;" class="text-input" autocomplete="current-password">
+            <button type="button" class="btn btn-secondary" id="cryptoUnlockBtn" style="width:100%;">Unlock</button>
+            <div id="cryptoUnlockStatus" style="font-size:12px; color:var(--text-2); margin-top:6px;"></div>
+          </div>
+
+          <div id="syncCryptoActive" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--card-border);">
+            <div style="font-size:12.5px; margin-bottom:8px;">🔒 End-to-end encrypted</div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-2); margin-bottom:10px;">
+              <input type="checkbox" id="cryptoRememberToggle"> Remember on this device
+            </label>
+            <button type="button" class="btn btn-secondary" id="cryptoChangePassBtn" style="width:100%; margin-bottom:8px;">Change passphrase</button>
+            <button type="button" class="btn btn-secondary" id="cryptoForgetBtn" style="width:100%;">Forget passphrase (lock)</button>
+          </div>
         </div>
         <button type="button" class="btn btn-secondary" id="syncForgetBtn" style="width:100%; margin-top:8px;">Remove sync connection</button>
       </div>
@@ -526,6 +553,7 @@
   <button type="button" id="updateToastBtn">Update</button>
 </div>
 
+<script src="./crypto.js"></script>
 <script src="./sync.js"></script>
 <script>
 (function(){
@@ -1515,16 +1543,23 @@
   }
 
   /* ---------- Cloud sync (optional, off by default) ---------- */
+  /* End-to-end encrypted: the server (Supabase) only ever stores the
+     ciphertext envelope produced by crypto.js. Flow: pull -> decrypt (with
+     the in-memory key) -> merge (sync.js, plaintext, local only) -> save
+     locally -> encrypt -> push. Sync refuses to run without a key. */
   var syncClient = null;         // supabase-js client, created lazily once configured
   var syncPushTimer = null;
   var syncing = false;
+  var cryptoKey = null;          // in-memory CryptoKey, non-extractable; never persisted except via rememberKey
+  var cryptoSalt = null;         // b64 salt string matching cryptoKey
+  var cryptoRemember = true;     // "Remember on this device" preference, default on
 
-  function setSyncStatus(status /* synced|syncing|offline|error */){
+  function setSyncStatus(status /* synced|syncing|offline|error|locked */){
     var dot = document.getElementById("syncStatusDot");
     var text = document.getElementById("syncStatusText");
     if(!dot) return;
     dot.className = "sync-status-dot " + status;
-    text.textContent = { synced:"Synced", syncing:"Syncing…", offline:"Offline", error:"Sync error" }[status] || status;
+    text.textContent = { synced:"Synced", syncing:"Syncing…", offline:"Offline", error:"Sync error", locked:"Locked — enter passphrase" }[status] || status;
   }
 
   function syncConfigured(){
@@ -1536,7 +1571,7 @@
     if(window.supabase) return Promise.resolve(window.supabase);
     return new Promise(function(resolve, reject){
       var script = document.createElement("script");
-      script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+      script.src = "./vendor/supabase.js";
       script.onload = function(){ resolve(window.supabase); };
       script.onerror = function(){ reject(new Error("Failed to load supabase-js (offline?)")); };
       document.head.appendChild(script);
@@ -1554,11 +1589,12 @@
 
   function schedulePush(){
     if(!syncConfigured()) return;
+    if(!cryptoKey) return; // locked: nothing can be safely encrypted yet
     if(syncPushTimer) clearTimeout(syncPushTimer);
     syncPushTimer = setTimeout(function(){ syncNow(); }, 2000);
   }
 
-  function pullRemoteState(client, userId){
+  function pullRawState(client, userId){
     return client.from("planner_state").select("data,updated_at").eq("user_id", userId).maybeSingle()
       .then(function(res){
         if(res.error) throw res.error;
@@ -1566,30 +1602,58 @@
       });
   }
 
-  function pushMergedState(client, userId, merged){
-    return client.from("planner_state").upsert({
-      user_id: userId, data: merged, updated_at: new Date().toISOString()
+  function pushEncryptedState(client, userId, plainState){
+    return PlannerCrypto.encrypt(cryptoKey, plainState, cryptoSalt).then(function(envelope){
+      return client.from("planner_state").upsert({
+        user_id: userId, data: envelope, updated_at: new Date().toISOString()
+      });
     }).then(function(res){ if(res.error) throw res.error; });
+  }
+
+  /* Resolves the raw remote column to a plain planner state, or rejects with
+     a tagged error. Legacy (pre-encryption) plaintext rows pass through
+     unchanged so they can be merged once, then re-saved as ciphertext. */
+  function decryptRemote(rawData){
+    if(rawData == null) return Promise.resolve(null);
+    if(!PlannerCrypto.isEnvelope(rawData)) return Promise.resolve(rawData); // legacy plaintext
+    if(!cryptoKey){
+      var lockedErr = new Error("locked"); lockedErr.code = "locked"; return Promise.reject(lockedErr);
+    }
+    return PlannerCrypto.decrypt(cryptoKey, rawData).catch(function(){
+      var wrongErr = new Error("wrong-passphrase"); wrongErr.code = "wrong-passphrase"; throw wrongErr;
+    });
+  }
+
+  function deriveAndActivateKey(passphrase, saltB64){
+    return PlannerCrypto.deriveKey(passphrase, saltB64).then(function(key){
+      cryptoKey = key;
+      cryptoSalt = saltB64;
+      if(cryptoRemember){
+        return PlannerCrypto.rememberKey(key, saltB64).catch(function(){}).then(function(){ return key; });
+      }
+      return key;
+    });
   }
 
   function syncNow(){
     if(!navigator.onLine){ setSyncStatus("offline"); return Promise.resolve(); }
     if(!syncConfigured()) return Promise.resolve();
     if(syncing) return Promise.resolve();
+    if(!cryptoKey){ setSyncStatus("locked"); return Promise.resolve(); }
     return getSyncClient().then(function(client){
       return client.auth.getUser().then(function(userRes){
         var user = userRes && userRes.data && userRes.data.user;
         if(!user) return; // not signed in yet
         syncing = true;
         setSyncStatus("syncing");
-        return pullRemoteState(client, user.id).then(function(remote){
+        return pullRawState(client, user.id).then(decryptRemote).then(function(remote){
           var merged = window.PlannerSync.mergeState(DB, remote);
           DB = migrate(merged);
           saveData();
           renderDay();
           if(state.view === "list") renderListView();
           applySettings();
-          return pushMergedState(client, user.id, DB);
+          return pushEncryptedState(client, user.id, DB);
         }).then(function(){
           syncing = false;
           setSyncStatus("synced");
@@ -1600,7 +1664,26 @@
     }).catch(function(e){
       console.warn("planner: sync failed", e);
       syncing = false;
-      setSyncStatus(navigator.onLine ? "error" : "offline");
+      if(e && e.code === "locked"){
+        setSyncStatus("locked");
+      } else if(e && e.code === "wrong-passphrase"){
+        // Never push on a decrypt failure - the remote blob is left untouched.
+        cryptoKey = null; cryptoSalt = null;
+        setSyncStatus("locked");
+        var unlockStatus = document.getElementById("cryptoUnlockStatus");
+        if(unlockStatus) unlockStatus.textContent = "Wrong passphrase.";
+        PlannerSyncUI.refreshPanel();
+      } else {
+        setSyncStatus(navigator.onLine ? "error" : "offline");
+      }
+    });
+  }
+
+  function showCryptoPanel(name /* "setup"|"locked"|"active"|null */){
+    var ids = { setup: "syncCryptoSetup", locked: "syncCryptoLocked", active: "syncCryptoActive" };
+    Object.keys(ids).forEach(function(key){
+      var el = document.getElementById(ids[key]);
+      if(el) el.style.display = (key === name) ? "block" : "none";
     });
   }
 
@@ -1614,15 +1697,26 @@
       document.getElementById("syncKeyInput").value = s.anonKey || "";
       if(!configured) return;
       getSyncClient().then(function(client){
-        return client.auth.getUser();
-      }).then(function(userRes){
-        var user = userRes && userRes.data && userRes.data.user;
-        document.getElementById("syncSignedOut").style.display = user ? "none" : "block";
-        document.getElementById("syncSignedIn").style.display = user ? "block" : "none";
-        if(user){
+        return client.auth.getUser().then(function(userRes){
+          var user = userRes && userRes.data && userRes.data.user;
+          document.getElementById("syncSignedOut").style.display = user ? "none" : "block";
+          document.getElementById("syncSignedIn").style.display = user ? "block" : "none";
+          if(!user){ showCryptoPanel(null); return; }
           document.getElementById("syncEmailLabel").textContent = user.email || "";
-          setSyncStatus(navigator.onLine ? "synced" : "offline");
-        }
+          if(cryptoKey){
+            setSyncStatus(navigator.onLine ? "synced" : "offline");
+            showCryptoPanel("active");
+            PlannerCrypto.getRememberedKey().then(function(rec){
+              var toggle = document.getElementById("cryptoRememberToggle");
+              if(toggle) toggle.checked = !!(rec && rec.key);
+            }).catch(function(){});
+            return;
+          }
+          setSyncStatus("locked");
+          return pullRawState(client, user.id).then(function(raw){
+            showCryptoPanel(PlannerCrypto.isEnvelope(raw) ? "locked" : "setup");
+          }).catch(function(){ showCryptoPanel("locked"); });
+        });
       }).catch(function(){ setSyncStatus("error"); });
     }
   };
@@ -1642,6 +1736,8 @@
     DB.settings.sync = { url: "", anonKey: "" };
     touchSettings(); saveData();
     syncClient = null;
+    cryptoKey = null; cryptoSalt = null;
+    PlannerCrypto.forgetKey().catch(function(){});
     PlannerSyncUI.refreshPanel();
   });
   document.getElementById("syncMagicLinkBtn").addEventListener("click", function(){
@@ -1661,8 +1757,115 @@
   document.getElementById("syncNowBtn").addEventListener("click", function(){ syncNow(); });
   document.getElementById("syncSignOutBtn").addEventListener("click", function(){
     getSyncClient().then(function(client){ return client.auth.signOut(); }).then(function(){
+      cryptoKey = null; cryptoSalt = null;
+      PlannerCrypto.forgetKey().catch(function(){});
       PlannerSyncUI.refreshPanel();
     });
+  });
+
+  document.getElementById("cryptoSetupBtn").addEventListener("click", function(){
+    var p1 = document.getElementById("cryptoNewPassInput").value;
+    var p2 = document.getElementById("cryptoNewPassConfirm").value;
+    var statusEl = document.getElementById("cryptoSetupStatus");
+    if(!p1 || p1.length < 8){ statusEl.textContent = "Use at least 8 characters."; return; }
+    if(p1 !== p2){ statusEl.textContent = "Passphrases don't match."; return; }
+    statusEl.textContent = "Setting up…";
+    getSyncClient().then(function(client){
+      return client.auth.getUser().then(function(userRes){
+        var user = userRes.data.user;
+        return pullRawState(client, user.id).then(function(raw){
+          if(PlannerCrypto.isEnvelope(raw)){
+            statusEl.textContent = "This account is already encrypted on another device — enter your existing passphrase to unlock instead.";
+            PlannerSyncUI.refreshPanel();
+            return;
+          }
+          var salt = PlannerCrypto.bufToB64(PlannerCrypto.generateSalt());
+          return deriveAndActivateKey(p1, salt).then(function(){
+            statusEl.textContent = "";
+            document.getElementById("cryptoNewPassInput").value = "";
+            document.getElementById("cryptoNewPassConfirm").value = "";
+            PlannerSyncUI.refreshPanel();
+            return syncNow();
+          });
+        });
+      });
+    }).catch(function(e){
+      statusEl.textContent = "Could not set up encryption: " + (e.message || e);
+    });
+  });
+
+  document.getElementById("cryptoUnlockBtn").addEventListener("click", function(){
+    var p = document.getElementById("cryptoPassphraseInput").value;
+    var statusEl = document.getElementById("cryptoUnlockStatus");
+    if(!p) return;
+    statusEl.textContent = "Unlocking…";
+    getSyncClient().then(function(client){
+      return client.auth.getUser().then(function(userRes){
+        var user = userRes.data.user;
+        return pullRawState(client, user.id).then(function(raw){
+          if(!PlannerCrypto.isEnvelope(raw)){
+            statusEl.textContent = "Nothing encrypted yet on this account — use \"Set up encryption\" instead.";
+            PlannerSyncUI.refreshPanel();
+            return;
+          }
+          return deriveAndActivateKey(p, raw.salt).then(function(){
+            return PlannerCrypto.decrypt(cryptoKey, raw); // validate the passphrase before committing to it
+          }).then(function(){
+            statusEl.textContent = "";
+            document.getElementById("cryptoPassphraseInput").value = "";
+            PlannerSyncUI.refreshPanel();
+            return syncNow();
+          }).catch(function(){
+            cryptoKey = null; cryptoSalt = null;
+            statusEl.textContent = "Wrong passphrase.";
+          });
+        });
+      });
+    }).catch(function(e){
+      statusEl.textContent = "Could not unlock: " + (e.message || e);
+    });
+  });
+
+  document.getElementById("cryptoRememberToggle").addEventListener("change", function(e){
+    cryptoRemember = e.target.checked;
+    if(cryptoRemember && cryptoKey){
+      PlannerCrypto.rememberKey(cryptoKey, cryptoSalt).catch(function(){});
+    } else if(!cryptoRemember){
+      PlannerCrypto.forgetKey().catch(function(){});
+    }
+  });
+
+  document.getElementById("cryptoChangePassBtn").addEventListener("click", function(){
+    var p1 = prompt("New passphrase (at least 8 characters):");
+    if(!p1) return;
+    if(p1.length < 8){ alert("Use at least 8 characters."); return; }
+    var p2 = prompt("Confirm the new passphrase:");
+    if(p1 !== p2){ alert("Passphrases don't match."); return; }
+    if(!confirm("This re-encrypts your cloud copy with a new passphrase and salt. Continue?")) return;
+    syncNow().then(function(){ // pull + merge with the OLD key first so nothing is lost
+      var newSalt = PlannerCrypto.bufToB64(PlannerCrypto.generateSalt());
+      return deriveAndActivateKey(p1, newSalt);
+    }).then(function(){
+      return getSyncClient();
+    }).then(function(client){
+      return client.auth.getUser().then(function(userRes){
+        var user = userRes.data.user;
+        return pushEncryptedState(client, user.id, DB);
+      });
+    }).then(function(){
+      alert("Passphrase changed.");
+      PlannerSyncUI.refreshPanel();
+    }).catch(function(e){
+      alert("Could not change passphrase: " + (e.message || e));
+    });
+  });
+
+  document.getElementById("cryptoForgetBtn").addEventListener("click", function(){
+    if(!confirm("Lock sync on this device? You can unlock again any time with your passphrase.")) return;
+    cryptoKey = null; cryptoSalt = null;
+    PlannerCrypto.forgetKey().catch(function(){});
+    setSyncStatus("locked");
+    PlannerSyncUI.refreshPanel();
   });
 
   window.addEventListener("online", function(){ syncNow(); });
@@ -1675,7 +1878,12 @@
   applySettings();
   renderDay();
   document.getElementById("appVersionLabel").textContent = "Planner v" + (typeof APP_VERSION !== "undefined" ? APP_VERSION : "?");
-  if(syncConfigured()) syncNow();
+  if(syncConfigured()){
+    PlannerCrypto.getRememberedKey().then(function(rec){
+      if(rec && rec.key){ cryptoKey = rec.key; cryptoSalt = rec.salt; syncNow(); }
+      else setSyncStatus("locked");
+    }).catch(function(){ setSyncStatus("locked"); });
+  }
 
   window.__planner = { DB: function(){return DB;}, occursOn: occursOn, recurrenceSummary: recurrenceSummary };
 })();
